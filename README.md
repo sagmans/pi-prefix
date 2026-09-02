@@ -1,6 +1,6 @@
 # @sagmans/pi-prefix
 
-A prefix key for [Pi](https://github.com/earendil-works/pi-coding-agent): press
+A prefix key for [Pi](https://github.com/earendil-works/pi): press
 one configurable prefix key, then a second key, to trigger a Pi app action, a
 slash command, or an extension event.
 

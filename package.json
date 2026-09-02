@@ -1,9 +1,14 @@
 {
   "name": "@sagmans/pi-prefix",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "description": "Configurable prefix key that maps a second key to Pi app actions, slash commands, or extension events",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagmans/pi-prefix.git"
+  },
   "keywords": [
     "pi-package",
     "pi",

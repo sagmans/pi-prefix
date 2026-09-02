@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+// WHY: rebranded Pi distributions may rename the project config directory;
+// the exported constant is the only rebrand-safe source.
+import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
 
 export type PrefixTarget =
@@ -86,7 +89,7 @@ const TARGET_PROPERTIES = [...TARGET_KEYS, "submit", "payload"] as const;
 const ESCAPE_KEY = "escape";
 const DEFAULT_TIMEOUT_MS = 2000;
 const CONFIG_FILE_NAME = "pi-prefix.json";
-const PROJECT_CONFIG_DIR = ".pi";
+
 const DEFAULTS_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -327,7 +330,7 @@ function readLayer(
 export function loadConfig(options: LoadConfigOptions): LoadConfigResult {
   const diagnostics: ConfigDiagnostic[] = [];
   const globalPath = join(options.agentDir, CONFIG_FILE_NAME);
-  const projectPath = join(options.cwd, PROJECT_CONFIG_DIR, CONFIG_FILE_NAME);
+  const projectPath = join(options.cwd, CONFIG_DIR_NAME, CONFIG_FILE_NAME);
 
   const defaultsLayer = readLayer(DEFAULTS_PATH, true, diagnostics);
   const globalLayer = readLayer(globalPath, false, diagnostics);
