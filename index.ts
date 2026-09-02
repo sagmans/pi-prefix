@@ -59,7 +59,7 @@ function statusMessage(state: SessionState | undefined, agentDir: string): strin
   }
   const { config } = state.result;
   const lines = [
-    "pi-prefix: active",
+    state.conflicts.length > 0 ? "pi-prefix: disabled (conflicts)" : "pi-prefix: active",
     `prefix: ${config.prefix}`,
     `timeout: ${config.timeoutMs}ms`,
     `bindings: ${bindingSummary(state)}`,

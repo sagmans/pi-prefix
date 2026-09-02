@@ -86,6 +86,18 @@ function makeEditor(config = makeConfig()) {
   return { editor, inner, calls, statuses, notifications, events };
 }
 
+test("extension shortcut callback is honored before delegation", () => {
+  const { editor, calls } = makeEditor();
+  const seen: string[] = [];
+  editor.onExtensionShortcut = (data: string) => {
+    seen.push(data);
+    return true;
+  };
+  editor.handleInput("ctrl+x");
+  assert.deepEqual(seen, ["ctrl+x"]);
+  assert.deepEqual(calls.input, []);
+});
+
 test("non-prefix input passes through transparently", () => {
   const { editor, calls, statuses } = makeEditor();
   editor.handleInput("a");

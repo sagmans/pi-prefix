@@ -176,6 +176,11 @@ export class PrefixEditor extends CustomEditor {
   }
 
   handleInput(data: string): void {
+    // WHY: Pi delivers registered shortcuts through this callback; honoring
+    // it first is what lets native registration activate prefix mode.
+    if (this.onExtensionShortcut?.(data)) {
+      return;
+    }
     if (this.disposed) {
       this.syncAppHandlers();
       this.inner.handleInput(data);
