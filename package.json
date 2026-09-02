@@ -1,0 +1,44 @@
+{
+  "name": "@sagmans/pi-prefix",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Configurable prefix key that maps a second key to Pi app actions, slash commands, or extension events",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "keybindings",
+    "prefix"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/",
+    "defaults.json",
+    "schema.json",
+    "skills/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "test": "node --experimental-transform-types --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.85.0",
+    "@earendil-works/pi-tui": ">=0.84.4 <0.85.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.5.0"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

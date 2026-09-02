@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://unpkg.com/@sagmans/pi-prefix/schema.json",
+  "title": "pi-prefix configuration layer",
+  "description": "One configuration layer for @sagmans/pi-prefix. All properties are optional so project layers can be partial overlays.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "prefix": { "$ref": "#/definitions/keyId" },
+    "timeoutMs": { "type": "integer", "exclusiveMinimum": 0 },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "null" },
+          { "$ref": "#/definitions/actionTarget" },
+          { "$ref": "#/definitions/commandTarget" },
+          { "$ref": "#/definitions/eventTarget" }
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "keyId": {
+      "type": "string",
+      "pattern": "^(ctrl\+)?(shift\+)?(alt\+)?(super\+)?([a-z]|[0-9]|escape|enter|tab|space|backspace|delete|insert|clear|home|end|pageUp|pageDown|up|down|left|right|f1|f2|f3|f4|f5|f6|f7|f8|f9|f10|f11|f12|`|-|=|\[|\]|\\|;|'|,|\.|/|!|@|#|\$|%|\^|&|\*|\(|\)|_|\+|\||~|\{|\}|:|<|>|\?)$"
+    },
+    "actionTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action"],
+      "properties": {
+        "action": { "type": "string", "minLength": 1 }
+      }
+    },
+    "commandTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "submit"],
+      "properties": {
+        "command": { "type": "string", "pattern": "^/" },
+        "submit": { "type": "boolean" }
+      }
+    },
+    "eventTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event"],
+      "properties": {
+        "event": { "type": "string", "minLength": 1 },
+        "payload": {}
+      }
+    }
+  }
+}
