@@ -39,6 +39,7 @@
     "typescript": "^5.5.0"
   },
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": ["./index.ts"],
+    "skills": ["./skills"]
   }
 }
