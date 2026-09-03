@@ -18,6 +18,11 @@ const SHORTCUT_DESCRIPTION = "Activate the pi-prefix prefix key";
 // resolves them by load order and reports them under Extension issues.
 const THIRD_PARTY_LIMIT_NOTE =
   "Third-party extension shortcut collisions are reported by Pi under [Extension issues] and resolved by load order.";
+// WHY: only extension-owned commands can execute through sendUserMessage;
+// built-in interactive commands and templates need the editor-submit path.
+const EXTENSION_COMMAND_SOURCE = "extension";
+const COMMAND_NAME_SEPARATOR = " ";
+const COMMAND_PREFIX = "/";
 
 type SessionState = {
   result: LoadConfigResult;
@@ -31,6 +36,12 @@ function formatDiagnostics(result: LoadConfigResult, level: "error" | "warning")
   return result.diagnostics
     .filter((diagnostic) => diagnostic.level === level)
     .map((diagnostic) => `${diagnostic.path}: ${diagnostic.message}`);
+}
+
+function extensionCommandName(command: string): string {
+  const withoutPrefix = command.startsWith(COMMAND_PREFIX) ? command.slice(COMMAND_PREFIX.length) : command;
+  const separatorIndex = withoutPrefix.indexOf(COMMAND_NAME_SEPARATOR);
+  return separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, separatorIndex);
 }
 
 function bindingSummary(state: SessionState): string {
@@ -134,6 +145,15 @@ export function setupPiPrefix(
           emitEvent: (event, payload) => pi.events.emit(event, payload),
           setStatus: (text) => ctx.ui.setStatus(STATUS_KEY, text),
           notify: (message, type) => ctx.ui.notify(message, type),
+          dispatchExtensionCommand: (command) => {
+            const name = extensionCommandName(command);
+            const isExtensionCommand = pi.getCommands().some(
+              (available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE,
+            );
+            if (!isExtensionCommand) return false;
+            pi.sendUserMessage(command, { expandPromptTemplates: true });
+            return true;
+          },
         });
         if (!sessionState.shortcutRegistered) {
           // WHY: the editor factory is the only place Pi hands extensions the

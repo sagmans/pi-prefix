@@ -27,7 +27,9 @@ extension event.
 
 - Bindings take exactly one of `action`, `command` (+ required `submit`),
   or `event` (+ optional `payload`).
-- `submit: true` runs the command immediately; `submit: false` types it for
+- `submit: true` runs the command immediately — commands whose `/commands`
+  source is `extension` dispatch directly and keep the editor draft intact,
+  anything else replaces the draft; `submit: false` types it for
   argument-taking commands.
 - Commands must start with `/`. Timeouts must be positive integers.
 - Validate the JSON against schema.json before saving.
