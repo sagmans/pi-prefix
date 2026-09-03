@@ -9,11 +9,15 @@ import type { EditorComponent } from "@earendil-works/pi-tui";
 
 type SavedShortcut = { shortcut: string; handler: () => void };
 
+type UserMessage = { content: string; options?: Record<string, unknown> };
+
 type Harness = {
   pi: Record<string, unknown>;
   priorFactory: ((tui: unknown, theme: unknown, keybindings: unknown) => EditorComponent) | undefined;
   commands: Map<string, (args: string, ctx: unknown) => Promise<void>>;
   shortcuts: SavedShortcut[];
+  userMessages: UserMessage[];
+  availableCommands: Array<{ name: string; source: string }>;
   events: Array<{ event: string; payload?: unknown }>;
   notifications: Array<{ message: string; type?: string }>;
   statuses: Array<[string, string | undefined]>;
@@ -26,6 +30,10 @@ type Harness = {
 function makeHarness(agentDir: string): Harness {
   const commands = new Map();
   const shortcuts: SavedShortcut[] = [];
+  const userMessages: UserMessage[] = [];
+  const availableCommands: Array<{ name: string; source: string }> = [
+    { name: "plan", source: "extension" },
+  ];
   const events: Array<{ event: string; payload?: unknown }> = [];
   const notifications: Array<{ message: string; type?: string }> = [];
   const statuses: Array<[string, string | undefined]> = [];
@@ -39,6 +47,10 @@ function makeHarness(agentDir: string): Harness {
     registerShortcut: (shortcut: string, options: { handler: () => void }) => {
       shortcuts.push({ shortcut, handler: options.handler });
     },
+    getCommands: () => availableCommands.map((command) => ({ ...command })),
+    sendUserMessage: (content: string, options?: Record<string, unknown>) => {
+      userMessages.push({ content, options });
+    },
     events: {
       emit: (event: string, payload?: unknown) => events.push({ event, payload }),
     },
@@ -51,6 +63,8 @@ function makeHarness(agentDir: string): Harness {
     priorFactory,
     commands,
     shortcuts,
+    userMessages,
+    availableCommands,
     events,
     notifications,
     statuses,
@@ -182,6 +196,42 @@ test("prior custom editor stays composed under the wrapper", () => {
   harness.startSession({ cwd: agentDir, trusted: true });
   const editor = mount(harness, makeKeybindings());
   assert.equal(editor.getText(), "inner-text");
+});
+
+test("submitted extension command dispatches directly and preserves the draft", () => {
+  const agentDir = mkdtempSync(join(tmpdir(), "pi-prefix-ext-"));
+  writeAgentConfig(agentDir, {
+    prefix: "ctrl+x",
+    bindings: { p: { command: "/plan", submit: true } },
+  });
+  const harness = makeHarness(agentDir);
+  harness.startSession({ cwd: agentDir, trusted: true });
+  const editor = mount(harness, makeKeybindings());
+  const draft = "long draft that must survive a plan-mode toggle";
+  editor.setText(draft);
+  harness.shortcuts[0].handler();
+  editor.handleInput("p");
+  assert.deepEqual(harness.userMessages, [
+    { content: "/plan", options: { expandPromptTemplates: true } },
+  ]);
+  assert.equal(editor.getText(), draft);
+});
+
+test("submitted non-extension command falls back to editor submission", () => {
+  const agentDir = mkdtempSync(join(tmpdir(), "pi-prefix-ext-"));
+  writeAgentConfig(agentDir, {
+    prefix: "ctrl+x",
+    bindings: { h: { command: "/hotkeys", submit: true } },
+  });
+  const harness = makeHarness(agentDir);
+  harness.startSession({ cwd: agentDir, trusted: true });
+  const editor = mount(harness, makeKeybindings());
+  harness.shortcuts[0].handler();
+  editor.handleInput("h");
+  assert.deepEqual(harness.userMessages, []);
+  // WHY: the fallback mirrors manual typing, so the command text is consumed by
+  // the editor submission rather than surviving as the draft.
+  assert.equal(editor.getText(), "");
 });
 
 test("session shutdown disposes the wrapper and clears status", () => {

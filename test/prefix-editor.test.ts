@@ -67,7 +67,10 @@ function makeInner() {
   return { inner, calls };
 }
 
-function makeEditor(config = makeConfig()) {
+function makeEditor(
+  config = makeConfig(),
+  dispatchExtensionCommandHandler: (command: string) => boolean = () => false,
+) {
   const { inner, calls } = makeInner();
   const statuses: Array<string | undefined> = [];
   const notifications: Array<{ message: string; type?: string }> = [];
@@ -77,13 +80,18 @@ function makeEditor(config = makeConfig()) {
     "tui.input.submit": { defaultKeys: "enter" },
   } as never);
   const theme = { borderColor: (str: string) => str };
+  const dispatches: string[] = [];
   const editor = new PrefixEditor(tui as never, theme as never, keybindings as never, inner as never, {
     config,
     emitEvent: (event, payload) => events.push({ event, payload }),
     setStatus: (text) => statuses.push(text),
     notify: (message, type) => notifications.push({ message, type }),
+    dispatchExtensionCommand: (command) => {
+      dispatches.push(command);
+      return dispatchExtensionCommandHandler(command);
+    },
   });
-  return { editor, inner, calls, statuses, notifications, events };
+  return { editor, inner, calls, statuses, notifications, events, dispatches };
 }
 
 test("extension shortcut callback is honored before delegation", () => {
@@ -175,11 +183,32 @@ test("unavailable action notifies without throwing", () => {
 });
 
 test("command with submit false only replaces the draft", () => {
-  const { editor, calls, calls: _ } = makeEditor();
+  const { editor, calls, dispatches } = makeEditor();
   editor.activate();
   editor.handleInput("i");
   assert.deepEqual(calls.texts, ["/model"]);
   assert.equal(calls.input.includes(SUBMIT_KEY_INPUT), false);
+  assert.deepEqual(dispatches, []);
+});
+
+test("handled submitted extension command preserves the draft", () => {
+  const draft = "long draft that must survive a plan-mode toggle";
+  const { editor, calls, dispatches } = makeEditor(makeConfig(), () => true);
+  editor.setText(draft);
+  editor.activate();
+  editor.handleInput("h");
+  assert.deepEqual(dispatches, ["/hotkeys"]);
+  assert.equal(editor.getText(), draft);
+  assert.equal(calls.input.includes(SUBMIT_KEY_INPUT), false);
+});
+
+test("unhandled submitted command falls back to editor replacement", () => {
+  const { editor, calls, dispatches } = makeEditor(makeConfig(), () => false);
+  editor.activate();
+  editor.handleInput("h");
+  assert.deepEqual(dispatches, ["/hotkeys"]);
+  assert.deepEqual(calls.texts, ["/hotkeys"]);
+  assert.equal(calls.input.at(-1), SUBMIT_KEY_INPUT);
 });
 
 test("command with submit true replaces and submits", () => {

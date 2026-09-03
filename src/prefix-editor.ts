@@ -15,6 +15,9 @@ export type PrefixEditorOptions = {
   emitEvent: (event: string, payload?: unknown) => void;
   setStatus: (text: string | undefined) => void;
   notify: (message: string, type?: "info" | "warning" | "error") => void;
+  // WHY: editor-independent commands must not sacrifice the user's draft, so
+  // the host decides whether direct dispatch applies before any setText.
+  dispatchExtensionCommand: (command: string) => boolean;
 };
 
 // WHY: Pi wires these three app actions through replaceable callbacks rather
@@ -160,6 +163,9 @@ export class PrefixEditor extends CustomEditor {
       return;
     }
     if ("command" in target) {
+      if (target.submit && this.options.dispatchExtensionCommand(target.command)) {
+        return;
+      }
       this.setText(target.command);
       if (target.submit) {
         this.submitCurrentDraft();
