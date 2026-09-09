@@ -6,6 +6,9 @@ name: publish
 on:
   push:
     tags: ["v*"]
+  # WHY: manual probe path; re-running a tag build reuses its ref, so
+  # validating a workflow fix needs a dispatchable entry point.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,7 +25,9 @@ jobs:
       # actions/setup-node v7.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: 22
+          # WHY: OIDC registry-token exchange needs npm >=11.15; Node 24
+          # bundles it, Node 22 does not.
+          node-version: 24
           registry-url: "https://registry.npmjs.org"
       # WHY: no dependency in the tree needs lifecycle scripts, so blocking
       # them removes a whole class of supply-chain install-time code.
