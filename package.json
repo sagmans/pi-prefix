@@ -36,12 +36,12 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.85.0",
-    "@earendil-works/pi-tui": ">=0.84.4 <0.85.0"
+    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.86.0",
+    "@earendil-works/pi-tui": ">=0.84.4 <0.86.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.85.0",
-    "@earendil-works/pi-tui": ">=0.84.4 <0.85.0",
+    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.86.0",
+    "@earendil-works/pi-tui": ">=0.84.4 <0.86.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.5.0"
   },
