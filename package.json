@@ -1,10 +1,13 @@
 {
   "name": "@sagmans/pi-prefix",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Configurable prefix key that maps a second key to Pi app actions, slash commands, or extension events",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sagmans/pi-prefix.git"
@@ -34,8 +37,8 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.85.0",
+    "@earendil-works/pi-tui": ">=0.84.4 <0.85.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.84.4 <0.85.0",
