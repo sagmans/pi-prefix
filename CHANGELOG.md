@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Docs only: unpinned README install line (pinned specs are skipped by `pi update`) and 0.1.1 provenance note. No code change.
+
 ## 0.1.1
 
 - Widen Pi peer and dev ranges to `<0.86.0`, covering the evidenced 0.85.x hosts. No behavior change.
