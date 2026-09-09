@@ -19,13 +19,12 @@ installing. Report vulnerabilities privately (see SECURITY.md).
 
 ## Install
 
-After publication:
-
 ```bash
-pi install npm:@sagmans/pi-prefix@0.1.0
+pi install npm:@sagmans/pi-prefix
 ```
 
-Then restart Pi (or run `/reload`).
+Unpinned on purpose: pinned specs are skipped by `pi update`, so pinning
+hides future upgrades. Then restart Pi (or run `/reload`).
 
 ## Ask your agent
 

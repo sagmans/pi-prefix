@@ -3,6 +3,7 @@
 ## 0.1.1
 
 - Widen Pi peer and dev ranges to `<0.86.0`, covering the evidenced 0.85.x hosts. No behavior change.
+- First workflow-attested release: published from CI with SLSA provenance. (0.1.0 was published directly and carries no attestation.)
 
 ## 0.1.0
 
