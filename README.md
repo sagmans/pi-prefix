@@ -130,6 +130,19 @@ That limitation is Pi's, not pi-prefix's.
 effective prefix, timeout, a binding summary, config errors and warnings, and
 any Pi keybinding conflicts.
 
+## Compatibility
+
+Supports Pi hosts `>=0.84.4 <0.88.0`; verified against 0.84.4, 0.86.1,
+0.87.0, and 0.87.1 (typecheck, test suite, and a live TUI session driving
+prefix activation, dispatch, draft preservation, and cancel).
+
+pi-prefix builds only on public extension surface: `CustomEditor` wrapping,
+the editor-component factory, native shortcut registration, command
+dispatch, and the extension event bus. Pi 0.85.0-0.87.0 could render
+working, compaction, and retry status inside the editor border for editors
+that opted in; pi-prefix did not opt in, and Pi removed that opt-in in
+0.87.1, so status renders beside the editor for every editor either way.
+
 ## What pi-prefix does not do
 
 - No shipped prefix, keymap, or bindings.

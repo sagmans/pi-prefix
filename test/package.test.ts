@@ -37,14 +37,20 @@ test("packaged files match the exact allowlist", () => {
     "src/conflicts.ts",
     "src/prefix-editor.ts",
   ]);
-  const packed = JSON.parse(
+  const packed: unknown = JSON.parse(
     execFileSync("npm", ["pack", "--dry-run", "--json"], {
       cwd: packageRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }),
-  ) as Array<{ files: Array<{ path: string }> }>;
-  const actual = new Set(packed[0].files.map((file) => file.path));
+  );
+  // WHY: npm <=11 prints an array of pack manifests while npm 12 keys the
+  // same manifest by package name; the gate must fail on content drift, not
+  // on the developer's npm version.
+  const manifest = Array.isArray(packed)
+    ? (packed[0] as { files?: Array<{ path: string }> } | undefined)
+    : Object.values(packed as Record<string, { files?: Array<{ path: string }> }>)[0];
+  const actual = new Set((manifest?.files ?? []).map((file) => file.path));
   assert.deepEqual([...actual].sort(), [...EXPECTED_PACK_FILES].sort());
 });
 
