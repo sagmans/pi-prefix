@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Widen Pi peer and dev ranges to `<0.88.0`, covering the evidenced 0.87.x hosts (typecheck, suite, and live TUI dogfood on 0.87.0/0.87.1). No behavior change; as a custom editor, pi-prefix keeps Pi's standalone working-status indicator instead of the 0.85+ in-border embedding.
+
 ## 0.1.2
 
 - Docs only: unpinned README install line (pinned specs are skipped by `pi update`) and 0.1.1 provenance note. No code change.
