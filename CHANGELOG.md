@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+## 0.1.4 - 2026-09-30
+
+- Declare compatibility with Pi 0.99.1 while retaining the existing 0.84.4–0.87.x support range.
+- Add an independent Pi 0.99.1 CI check while preserving the locked baseline.
+- Refresh the baseline development dependencies without raising the minimum supported Pi host.
+
 ## 0.1.3
 
 - Widen Pi peer and dev ranges to `<0.88.0`. Verified against 0.84.4, 0.86.1, 0.87.0, and 0.87.1 hosts: typecheck, test suite, and a live TUI dogfood driving prefix activation, dispatch, draft preservation, and cancel. No behavior change.

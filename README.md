@@ -132,16 +132,17 @@ any Pi keybinding conflicts.
 
 ## Compatibility
 
-Supports Pi hosts `>=0.84.4 <0.88.0`; verified against 0.84.4, 0.86.1,
-0.87.0, and 0.87.1 (typecheck, test suite, and a live TUI session driving
-prefix activation, dispatch, draft preservation, and cancel).
+Supports Pi hosts `>=0.84.4 <0.88.0 || >=0.99.1 <0.100.0`.
+The existing baseline covers 0.84.4, 0.86.1, 0.87.0, and 0.87.1.
+A separate CI job checks Pi 0.99.1 without changing the baseline lockfile.
+Other intervening minor versions are not claimed as supported.
+Pi 0.99.1 passed combined stash, history, and prefix smoke checks in regular
+and fullscreen modes, including `/reload`.
 
 pi-prefix builds only on public extension surface: `CustomEditor` wrapping,
 the editor-component factory, native shortcut registration, command
-dispatch, and the extension event bus. Pi 0.85.0-0.87.0 could render
-working, compaction, and retry status inside the editor border for editors
-that opted in; pi-prefix did not opt in, and Pi removed that opt-in in
-0.87.1, so status renders beside the editor for every editor either way.
+dispatch, and the extension event bus. pi-prefix does not opt into embedded
+working-status rendering. Pi controls the fallback status placement.
 
 ## What pi-prefix does not do
 
@@ -153,6 +154,11 @@ that opted in; pi-prefix did not opt in, and Pi removed that opt-in in
   native shortcut registration.
 
 ## Development
+
+The locked baseline retains Pi 0.84.4. A development-only npm override patches
+its pinned Undici dependency without changing the host API under test.
+Consumers supply Pi's runtime modules. npm does not apply this package's
+overrides when it is installed as a dependency.
 
 ```bash
 npm install
