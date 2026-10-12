@@ -172,3 +172,5 @@ npm run typecheck
 npm test
 npm pack --dry-run   # package-content gate
 ```
+
+Before each release, run the live checks in [DOGFOOD.md](DOGFOOD.md).
