@@ -30,7 +30,7 @@ hides future upgrades. Then restart Pi (or run `/reload`).
 
 Ask your coding agent to configure pi-prefix for you, for example:
 
-> Set up @sagmans/pi-prefix for me: prefix ctrl+x, with m for model picker,
+> Set up @sagmans/pi-prefix for me: prefix ctrl+\, with m for model picker,
 > h for /hotkeys submitted, and a binding for the open event of the extension
 > I use.
 
@@ -51,12 +51,17 @@ inherited binding. Activation needs an effective `prefix` and at least one
 effective binding. Any parse or validation error fails the whole effective
 config with the source path and reason.
 
+The prefix is configurable: pick any key that no Pi or terminal binding
+already uses. pi-prefix disables itself when the prefix conflicts with a Pi
+binding. For example, `ctrl+x` is bound to `app.message.copy` in Pi 1.1.0, so
+the examples use `ctrl+\` (written `"ctrl+\\"` in JSON), which is free.
+
 `~/.pi/agent/pi-prefix.json` example:
 
 ```json
 {
   "$schema": "https://unpkg.com/@sagmans/pi-prefix/schema.json",
-  "prefix": "ctrl+x",
+  "prefix": "ctrl+\\",
   "timeoutMs": 2000,
   "bindings": {
     "m": { "action": "app.model.select" },
@@ -82,7 +87,7 @@ Trusted project overlay example (`<project>/.pi/pi-prefix.json`):
 
 All properties are optional at layer level.
 
-- `prefix` — one key id, e.g. `ctrl+x`, `f9`, `alt+shift+p`. See Pi's
+- `prefix` — one key id, e.g. `ctrl+\`, `f9`, `alt+shift+p`. See Pi's
   keybinding format (`modifier+key`, modifiers `ctrl`, `shift`, `alt`,
   `super`; aliases `esc`/`return` are normalized to `escape`/`enter`).
 - `timeoutMs` — positive integer; prefix mode clears after this idle time.
