@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Docs only: README examples use `ctrl+\`, which is free in Pi 1.1.0, and state that insert-only bindings replace the draft. Add a live dogfooding matrix (`DOGFOOD.md`) and agent guidance (`AGENTS.md`) to run it before each release. No code change.
+
 ## 0.1.6 - 2026-10-13
 
 - `/pi-prefix` now lists config errors and warnings while the extension is inactive, so an invalid config can be diagnosed after the startup notice has scrolled away.

@@ -30,7 +30,7 @@ hides future upgrades. Then restart Pi (or run `/reload`).
 
 Ask your coding agent to configure pi-prefix for you, for example:
 
-> Set up @sagmans/pi-prefix for me: prefix ctrl+x, with m for model picker,
+> Set up @sagmans/pi-prefix for me: prefix ctrl+\, with m for model picker,
 > h for /hotkeys submitted, and a binding for the open event of the extension
 > I use.
 
@@ -51,12 +51,17 @@ inherited binding. Activation needs an effective `prefix` and at least one
 effective binding. Any parse or validation error fails the whole effective
 config with the source path and reason.
 
+The prefix is configurable: pick any key that no Pi or terminal binding
+already uses. pi-prefix disables itself when the prefix conflicts with a Pi
+binding. For example, `ctrl+x` is bound to `app.message.copy` in Pi 1.1.0, so
+the examples use `ctrl+\` (written `"ctrl+\\"` in JSON), which is free.
+
 `~/.pi/agent/pi-prefix.json` example:
 
 ```json
 {
   "$schema": "https://unpkg.com/@sagmans/pi-prefix/schema.json",
-  "prefix": "ctrl+x",
+  "prefix": "ctrl+\\",
   "timeoutMs": 2000,
   "bindings": {
     "m": { "action": "app.model.select" },
@@ -82,7 +87,7 @@ Trusted project overlay example (`<project>/.pi/pi-prefix.json`):
 
 All properties are optional at layer level.
 
-- `prefix` — one key id, e.g. `ctrl+x`, `f9`, `alt+shift+p`. See Pi's
+- `prefix` — one key id, e.g. `ctrl+\`, `f9`, `alt+shift+p`. See Pi's
   keybinding format (`modifier+key`, modifiers `ctrl`, `shift`, `alt`,
   `super`; aliases `esc`/`return` are normalized to `escape`/`enter`).
 - `timeoutMs` — positive integer; prefix mode clears after this idle time.
@@ -94,7 +99,7 @@ All properties are optional at layer level.
   - `{ "command": "/hotkeys", "submit": true }` — a slash command.
     `submit: true` runs the command immediately; extension commands run
     without touching the editor draft, anything else replaces the draft and
-    submits. `submit: false` types the command and stops.
+    submits. `submit: false` replaces the draft with the command and stops.
   - `{ "event": "example-extension:open", "payload": {} }` — emits the event
     name and exact JSON payload through `pi.events`. The extension that owns
     the event defines valid names and payloads.
@@ -111,9 +116,9 @@ dispatched directly through Pi's command pipeline and the current editor draft
 is preserved untouched. Any other command — built-ins like `/model` or
 third-party commands Pi reports without the `extension` source — replaces the
 draft and submits it through the editor,
-matching manual typing. With `submit: false` the command text sits in the
-editor until you press Enter, which is the right form for commands that take an
-argument.
+matching manual typing. With `submit: false` the command text replaces the
+current draft and sits in the editor until you press Enter, which is the right
+form for commands that take an argument.
 
 ## Conflicts and /pi-prefix
 
@@ -167,3 +172,5 @@ npm run typecheck
 npm test
 npm pack --dry-run   # package-content gate
 ```
+
+Before each release, run the live checks in [DOGFOOD.md](DOGFOOD.md).
