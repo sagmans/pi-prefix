@@ -36,8 +36,8 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.88.0 || >=0.99.1 <0.100.0",
-    "@earendil-works/pi-tui": ">=0.84.4 <0.88.0 || >=0.99.1 <0.100.0"
+    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0",
+    "@earendil-works/pi-tui": ">=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0"
   },
   "overrides": {
     "@earendil-works/pi-coding-agent": {
