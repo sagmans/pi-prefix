@@ -99,7 +99,7 @@ All properties are optional at layer level.
   - `{ "command": "/hotkeys", "submit": true }` — a slash command.
     `submit: true` runs the command immediately; extension commands run
     without touching the editor draft, anything else replaces the draft and
-    submits. `submit: false` types the command and stops.
+    submits. `submit: false` replaces the draft with the command and stops.
   - `{ "event": "example-extension:open", "payload": {} }` — emits the event
     name and exact JSON payload through `pi.events`. The extension that owns
     the event defines valid names and payloads.
@@ -116,9 +116,9 @@ dispatched directly through Pi's command pipeline and the current editor draft
 is preserved untouched. Any other command — built-ins like `/model` or
 third-party commands Pi reports without the `extension` source — replaces the
 draft and submits it through the editor,
-matching manual typing. With `submit: false` the command text sits in the
-editor until you press Enter, which is the right form for commands that take an
-argument.
+matching manual typing. With `submit: false` the command text replaces the
+current draft and sits in the editor until you press Enter, which is the right
+form for commands that take an argument.
 
 ## Conflicts and /pi-prefix
 
