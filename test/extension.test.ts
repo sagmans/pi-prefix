@@ -212,7 +212,7 @@ test("submitted extension command dispatches directly and preserves the draft", 
   harness.shortcuts[0].handler();
   editor.handleInput("p");
   assert.deepEqual(harness.userMessages, [
-    { content: "/plan", options: { expandPromptTemplates: true } },
+    { content: "/plan", options: { expandPromptTemplates: true, deliverAs: "steer" } },
   ]);
   assert.equal(editor.getText(), draft);
 });
@@ -268,6 +268,22 @@ test("status command reports inactive state without config", async () => {
   });
   assert.ok(harness.notifications.some((n) => n.message.includes("inactive")));
   assert.ok(harness.notifications.some((n) => n.message.includes("pi-prefix.json")));
+});
+
+test("status command reports load errors while inactive", async () => {
+  const agentDir = mkdtempSync(join(tmpdir(), "pi-prefix-ext-"));
+  writeAgentConfig(agentDir, { prefix: "ctrl+x", timeoutMs: 0, bindings: { h: { command: "/hotkeys" } } });
+  const harness = makeHarness(agentDir);
+  harness.startSession({ cwd: agentDir, trusted: true });
+  const handler = harness.commands.get("pi-prefix");
+  assert.ok(handler);
+  await handler("", {
+    ui: { notify: (message: string, type?: string) => harness.notifications.push({ message, type }) },
+  });
+  const status = harness.notifications.at(-1)?.message ?? "";
+  assert.ok(status.includes("inactive"));
+  assert.ok(status.includes("error:"));
+  assert.ok(status.includes("timeoutMs must be a positive integer"));
 });
 
 test("status command reports active state with config summary", async () => {
