@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 - 2026-10-13
 
 - Declare compatibility with Pi 1.x (`>=1.0.0 <2.0.0`) while retaining the existing 0.84.4–0.87.x and 0.99.x support ranges. No source change was needed: the Pi 1.0 to 1.1 changelog has no breaking change to the editor, shortcut, command, or event APIs this extension uses.
 - Move the independent CI compatibility check from Pi 0.99.1 to 1.1.0, alongside the locked baseline.
