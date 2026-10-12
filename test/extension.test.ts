@@ -212,7 +212,7 @@ test("submitted extension command dispatches directly and preserves the draft", 
   harness.shortcuts[0].handler();
   editor.handleInput("p");
   assert.deepEqual(harness.userMessages, [
-    { content: "/plan", options: { expandPromptTemplates: true } },
+    { content: "/plan", options: { expandPromptTemplates: true, deliverAs: "steer" } },
   ]);
   assert.equal(editor.getText(), draft);
 });

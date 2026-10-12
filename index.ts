@@ -23,6 +23,7 @@ const THIRD_PARTY_LIMIT_NOTE =
 const EXTENSION_COMMAND_SOURCE = "extension";
 const COMMAND_NAME_SEPARATOR = " ";
 const COMMAND_PREFIX = "/";
+const DELIVER_WHILE_BUSY = "steer";
 
 type SessionState = {
   result: LoadConfigResult;
@@ -171,7 +172,10 @@ export function setupPiPrefix(
               (available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE,
             );
             if (!isExtensionCommand) return false;
-            pi.sendUserMessage(command, { expandPromptTemplates: true });
+            // WHY: newer Pi hosts treat a starting run as busy and reject
+            // sendUserMessage without deliverAs; steer matches what Enter does
+            // for typed input while the agent is working.
+            pi.sendUserMessage(command, { expandPromptTemplates: true, deliverAs: DELIVER_WHILE_BUSY });
             return true;
           },
         });
