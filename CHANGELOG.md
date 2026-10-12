@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6 - 2026-10-13
 
 - `/pi-prefix` now lists config errors and warnings while the extension is inactive, so an invalid config can be diagnosed after the startup notice has scrolled away.
 - Pass a delivery mode when dispatching extension commands, as required by the next Pi release while a run is starting. Pi 1.1.0 and the 0.84.4 baseline already accept it, so behavior on current hosts is unchanged.
