@@ -132,12 +132,13 @@ any Pi keybinding conflicts.
 
 ## Compatibility
 
-Supports Pi hosts `>=0.84.4 <0.88.0 || >=0.99.1 <0.100.0`.
+Supports Pi hosts `>=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0`.
 The existing baseline covers 0.84.4, 0.86.1, 0.87.0, and 0.87.1.
-A separate CI job checks Pi 0.99.1 without changing the baseline lockfile.
+A separate CI job checks Pi 1.1.0 without changing the baseline lockfile.
 Other intervening minor versions are not claimed as supported.
 Pi 0.99.1 passed combined stash, history, and prefix smoke checks in regular
-and fullscreen modes, including `/reload`.
+and fullscreen modes, including `/reload`. Pi 1.1.0 passed a live TUI smoke
+check of prefix activation, dispatch, and cancel.
 
 pi-prefix builds only on public extension surface: `CustomEditor` wrapping,
 the editor-component factory, native shortcut registration, command
