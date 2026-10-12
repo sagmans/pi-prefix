@@ -23,6 +23,7 @@ const THIRD_PARTY_LIMIT_NOTE =
 const EXTENSION_COMMAND_SOURCE = "extension";
 const COMMAND_NAME_SEPARATOR = " ";
 const COMMAND_PREFIX = "/";
+const DELIVER_WHILE_BUSY = "steer";
 
 type SessionState = {
   result: LoadConfigResult;
@@ -60,13 +61,28 @@ function bindingSummary(state: SessionState): string {
     .join(", ");
 }
 
-function statusMessage(state: SessionState | undefined, agentDir: string): string {
+function statusMessage(
+  state: SessionState | undefined,
+  agentDir: string,
+  inactiveResult: LoadConfigResult | undefined,
+): string {
   if (state === undefined || state.result.config === undefined) {
-    return [
+    const lines = [
       "pi-prefix: inactive",
       `global config: ${agentDir}/pi-prefix.json`,
       "No effective prefix and bindings. See the package README for configuration.",
-    ].join(" | ");
+    ];
+    // WHY: startup notices scroll away; the status command is where users
+    // look later to learn why the extension is off.
+    if (inactiveResult !== undefined) {
+      for (const error of formatDiagnostics(inactiveResult, "error")) {
+        lines.push(`error: ${error}`);
+      }
+      for (const warning of formatDiagnostics(inactiveResult, "warning")) {
+        lines.push(`warning: ${warning}`);
+      }
+    }
+    return lines.join(" | ");
   }
   const { config } = state.result;
   const lines = [
@@ -96,11 +112,14 @@ export function setupPiPrefix(
   options: { agentDir: string },
 ): void {
   let state: SessionState | undefined;
+  // WHY: an inactive session has no SessionState, but its load diagnostics
+  // must stay reachable from the status command.
+  let inactiveResult: LoadConfigResult | undefined;
 
   pi.registerCommand(STATUS_COMMAND, {
     description: "Show pi-prefix status, loaded config layers, and conflicts",
     handler: async (_args: string, ctx: ExtensionContext) => {
-      ctx.ui.notify(statusMessage(state, options.agentDir), "info");
+      ctx.ui.notify(statusMessage(state, options.agentDir, inactiveResult), "info");
     },
   });
 
@@ -120,8 +139,10 @@ export function setupPiPrefix(
     if (result.config === undefined) {
       // WHY: absence of a full map is ordinary; the extension stays inert
       // without touching the editor chain.
+      inactiveResult = result;
       return;
     }
+    inactiveResult = undefined;
     state = {
       result,
       projectTrusted: ctx.isProjectTrusted(),
@@ -151,7 +172,10 @@ export function setupPiPrefix(
               (available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE,
             );
             if (!isExtensionCommand) return false;
-            pi.sendUserMessage(command, { expandPromptTemplates: true });
+            // WHY: newer Pi hosts treat a starting run as busy and reject
+            // sendUserMessage without deliverAs; steer matches what Enter does
+            // for typed input while the agent is working.
+            pi.sendUserMessage(command, { expandPromptTemplates: true, deliverAs: DELIVER_WHILE_BUSY });
             return true;
           },
         });
@@ -188,6 +212,7 @@ export function setupPiPrefix(
   pi.on("session_shutdown", (_event, ctx) => {
     state?.wrapper?.dispose();
     state = undefined;
+    inactiveResult = undefined;
     ctx.ui.setStatus(STATUS_KEY, undefined);
   });
 }
