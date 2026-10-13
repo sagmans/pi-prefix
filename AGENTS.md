@@ -18,3 +18,7 @@
 
 Never read, copy, log, or mutate the real `~/.pi/agent`. Runtime checks must
 use the disposable `HOME` from the DOGFOOD.md setup.
+
+## Git hooks
+
+Checks run in `.githooks/`, not in push/PR CI. Run `sh scripts/setup-hooks.sh` once per clone; never bypass hooks with `--no-verify`. `pre-push`: typecheck, tests, `npm audit --audit-level=high`, pack dry-run, then Pi 1.1.0 and 1.2.0 compatibility in a throwaway copy.

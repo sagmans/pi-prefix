@@ -195,7 +195,7 @@ any Pi keybinding conflicts.
 
 Supports Pi hosts `>=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0`.
 The existing baseline covers 0.84.4, 0.86.1, 0.87.0, and 0.87.1.
-A separate CI job checks Pi 1.1.0 without changing the baseline lockfile.
+The `pre-push` hook also checks Pi 1.1.0 and 1.2.0 in a throwaway copy, without changing the baseline lockfile.
 Other intervening minor versions are not claimed as supported.
 Pi 0.99.1 passed combined stash, history, and prefix smoke checks in regular
 and fullscreen modes, including `/reload`. Pi 1.1.0 passed a live TUI smoke
@@ -230,3 +230,16 @@ npm pack --dry-run   # package-content gate
 ```
 
 Before each release, run the live checks in [DOGFOOD.md](DOGFOOD.md).
+
+## Git hooks
+
+Checks run in tracked local Git hooks instead of push/PR CI. Enable them once per clone:
+
+```sh
+sh scripts/setup-hooks.sh
+```
+
+Each hook runs your global Git hook of the same name first (if any), then this repository's checks:
+
+- `pre-commit`: staged whitespace and conflict-marker check.
+- `pre-push`: typecheck, tests, `npm audit --audit-level=high`, pack dry-run, then Pi 1.1.0 and 1.2.0 compatibility in a throwaway copy.

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs the checks hosted CI ran on every push (typecheck, tests, audit, pack dry-run), so a regression never reaches main. The publish workflow repeats them before release.
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+npm run typecheck
+npm test
+npm audit --audit-level=high
+npm pack --dry-run >/dev/null
