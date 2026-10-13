@@ -124,6 +124,16 @@ export const PROJECT_BLOCKED_COMMANDS: ReadonlySet<string> = new Set([
   "trust",
   "quit",
 ]);
+// WHY: a repository chooses project binding text, so it must be exactly one
+// plain command name: no arguments (their meaning depends on each extension),
+// no case or slash variants, and nothing that only the keypress check refuses.
+const PROJECT_COMMAND_PATTERN = /^\/[a-z0-9][a-z0-9:_-]*$/;
+// WHY: control, format (bidi, zero-width) and line-separator characters can
+// make a command look different in the approval dialog than what runs.
+const UNSAFE_TEXT_PATTERN = /[\p{Cc}\p{Cf}\u2028\u2029]/u;
+// WHY: an approved overlay must never reach pi-prefix's own command, which
+// can approve overlays.
+const SELF_COMMAND_NAME = "pi-prefix";
 // WHY: a project overlay may only add keys and only bind slash commands; the
 // host later checks that the command is a registered extension command.
 const PROJECT_FORBIDDEN_SCALARS = ["prefix", "timeoutMs"] as const;
@@ -287,6 +297,25 @@ export function commandName(command: string): string {
   const withoutPrefix = command.startsWith(COMMAND_PREFIX) ? command.slice(COMMAND_PREFIX.length) : command;
   const separatorIndex = withoutPrefix.indexOf(COMMAND_NAME_SEPARATOR);
   return separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, separatorIndex);
+}
+
+/**
+ * Why a project binding's command text is not allowed, or undefined when it
+ * is. WHY: load-time approval and keypress dispatch share this one rule so an
+ * overlay the user approves never contains content refused later.
+ */
+export function projectCommandProblem(command: string): string | undefined {
+  if (UNSAFE_TEXT_PATTERN.test(command)) {
+    return "contains control, bidi, or zero-width characters";
+  }
+  if (!PROJECT_COMMAND_PATTERN.test(command)) {
+    return `must be exactly "/name" (lowercase letters, digits, ":", "_", "-"; no arguments)`;
+  }
+  const name = commandName(command).toLowerCase();
+  if (name === SELF_COMMAND_NAME || PROJECT_BLOCKED_COMMANDS.has(name)) {
+    return "is a blocked command";
+  }
+  return undefined;
 }
 
 /** Hash overlay bytes exactly as read, so any edit invalidates an approval. */
@@ -479,8 +508,11 @@ export function parseProjectOverlay(
       problems.push(`binding "${key}" cannot replace a user binding`);
     } else if (!("command" in target)) {
       problems.push(`binding "${key}" must be a command`);
-    } else if (PROJECT_BLOCKED_COMMANDS.has(commandName(target.command))) {
-      problems.push(`binding "${key}" uses blocked command "${target.command}"`);
+    } else {
+      const problem = projectCommandProblem(target.command);
+      // WHY: JSON.stringify escapes hidden characters so the reason shown to
+      // the user cannot itself be disguised.
+      if (problem !== undefined) problems.push(`binding "${key}" command ${JSON.stringify(target.command)} ${problem}`);
     }
   }
   return problems.length > 0 ? { problems } : { layer, problems };

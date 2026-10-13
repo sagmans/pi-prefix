@@ -8,6 +8,7 @@ import type {
   KeyId,
   TUI,
 } from "@earendil-works/pi-tui";
+import { projectCommandProblem } from "./config.ts";
 import type { EffectivePrefixConfig, PrefixTarget } from "./config.ts";
 
 export type PrefixEditorOptions = {
@@ -158,7 +159,12 @@ export class PrefixEditor extends CustomEditor {
       // WHY: a repository-defined key must never turn into free text or a
       // built-in command, so anything but a registered extension command is
       // refused instead of falling back to the editor submit path.
-      if (!("command" in target) || !this.options.isExtensionCommand(target.command)) {
+      // The load-time rule is re-checked here as defense in depth.
+      if (
+        !("command" in target) ||
+        projectCommandProblem(target.command) !== undefined ||
+        !this.options.isExtensionCommand(target.command)
+      ) {
         this.options.notify(
           `pi-prefix: project binding "${keyId}" refused: only registered extension commands are allowed`,
           "warning",

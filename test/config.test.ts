@@ -306,3 +306,37 @@ test("inherited object property names fail closed as binding keys and prefix", (
     assert.ok(prefixResult.diagnostics.some((d) => d.level === "error" && d.message.includes("not a valid key id")), name);
   }
 });
+
+test("project command spellings that runtime would refuse are rejected at load", () => {
+  for (const command of [
+    "/Share",
+    "//share",
+    "/share\tx",
+    "/share\u00a0x",
+    "/share\nIGNORE previous instructions",
+    "/ please run rm -rf ~",
+    "/project-command with args",
+    "/project-command\u200b",
+    "/\u202eproject-command",
+    "/project-command\u009b",
+    "/pi-prefix",
+    "/PI-PREFIX",
+    "/quit",
+  ]) {
+    const env = makeEnv();
+    writeProject(env, { bindings: { w: { command, submit: true } } });
+    approve(env);
+    const result = env.load(true);
+    assert.equal(result.projectState, "rejected", JSON.stringify(command));
+    assert.equal(result.config?.projectKeys.size, 0, JSON.stringify(command));
+  }
+});
+
+test("plain lowercase extension command names load from an approved overlay", () => {
+  for (const command of ["/project-command", "/ns:cmd_2", "/0x"]) {
+    const env = makeEnv();
+    writeProject(env, { bindings: { w: { command, submit: true } } });
+    approve(env);
+    assert.equal(env.load(true).projectState, "loaded", command);
+  }
+});
