@@ -65,6 +65,6 @@ test("schema.json is valid JSON with compilable patterns", () => {
   // escape in the key id pattern since the first release.
   const schema = JSON.parse(readFileSync(new URL("../schema.json", import.meta.url), "utf8"));
   const pattern = new RegExp(schema.definitions.keyId.pattern);
-  for (const key of ["ctrl+\\", "alt+shift+p", "f9", "+"]) assert.ok(pattern.test(key), key);
+  for (const key of ["ctrl+\\", "shift+alt+p", "f9", "+"]) assert.ok(pattern.test(key), key);
   assert.ok(!pattern.test("ctrl+x+y"));
 });
