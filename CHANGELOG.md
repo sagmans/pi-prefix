@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Breaking (security hardening):** project overlays are now opt-in. A `<project>/.pi/pi-prefix.json` loads only when Pi trusts the project and the user has approved that project path and the exact overlay content in the global config (`projectOverlays.allow`). Approve with `/pi-prefix allow-project`; a changed overlay is ignored until approved again. Existing overlays stay inactive until approved.
+- **Breaking:** project overlays can only add keys bound to registered extension commands. They can no longer set `prefix` or `timeoutMs`, replace or remove global bindings, or bind actions, events, built-in commands, or plain text. `/share`, `/export`, `/login`, `/trust`, and `/quit` are refused.
+- Show a startup notice and a `prefix [project]` status marker while a project overlay is active, and report the overlay state in `/pi-prefix`.
 - Docs only: README examples use `ctrl+\`, which is free in Pi 1.1.0, and state that insert-only bindings replace the draft. Add a live dogfooding matrix (`DOGFOOD.md`) and agent guidance (`AGENTS.md`) to run it before each release. No code change.
 
 ## 0.1.6 - 2026-10-13

@@ -5,10 +5,12 @@ description: Configure or troubleshoot @sagmans/pi-prefix (Pi prefix-key package
 
 # pi-prefix configuration
 
-Configure @sagmans/pi-prefix. Two layers: global `~/.pi/agent/pi-prefix.json`,
-trusted project `<project>/.pi/pi-prefix.json`. Edit the smallest layer that
-fits: global for user-wide behavior, project for project-only additions,
-replacements, or removals (`null` removes an inherited binding).
+Configure @sagmans/pi-prefix. Two layers: global `~/.pi/agent/pi-prefix.json`
+and project `<project>/.pi/pi-prefix.json`. Put user-wide behavior in the
+global layer. A project layer can only add new keys bound to registered
+extension commands, and loads only after the user runs
+`/pi-prefix allow-project` in that project and confirms. Never write
+`projectOverlays` approvals for the user; approval is their own decision.
 
 ## Before editing
 

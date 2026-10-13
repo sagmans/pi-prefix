@@ -43,13 +43,12 @@ Two layers, merged in order **defaults → global → project**:
 | Layer | Path | When loaded |
 | --- | --- | --- |
 | Global | `~/.pi/agent/pi-prefix.json` | always |
-| Project | `<project>/.pi/pi-prefix.json` | only when the project is trusted |
+| Project | `<project>/.pi/pi-prefix.json` | only when you approved it and Pi trusts the project (see [Project overlays](#project-overlays)) |
 
-Project scalar values (`prefix`, `timeoutMs`) replace global values. Project
-bindings add or replace global bindings by normalized key; `null` removes an
-inherited binding. Activation needs an effective `prefix` and at least one
-effective binding. Any parse or validation error fails the whole effective
-config with the source path and reason.
+`prefix` and `timeoutMs` come from the global layer. A project overlay can
+only add command bindings. Activation needs an effective `prefix` and at least
+one effective binding. Any parse or validation error in the global layer fails
+the whole effective config with the source path and reason.
 
 The prefix is configurable: pick any key that no Pi or terminal binding
 already uses. pi-prefix disables itself when the prefix conflicts with a Pi
@@ -72,16 +71,51 @@ the examples use `ctrl+\` (written `"ctrl+\\"` in JSON), which is free.
 }
 ```
 
-Trusted project overlay example (`<project>/.pi/pi-prefix.json`):
+Project overlay example (`<project>/.pi/pi-prefix.json`):
 
 ```json
 {
   "bindings": {
-    "o": null,
     "w": { "command": "/project-command", "submit": true }
   }
 }
 ```
+
+### Project overlays
+
+A project overlay is opt-in per project. pi-prefix loads it only when both
+are true:
+
+1. Pi trusts the project.
+2. Your global config approves this project path and the exact overlay
+   content.
+
+To approve, open Pi in the project and run `/pi-prefix allow-project`. Pi
+shows the project path, the overlay's sha256, and its content. If you
+confirm, pi-prefix adds an entry to `projectOverlays.allow` in your global
+config. Run `/reload` to apply it. If the overlay file changes later,
+pi-prefix ignores it and asks you to approve it again. To revoke, remove the
+entry from your global config.
+
+```json
+{
+  "projectOverlays": {
+    "allow": [
+      { "path": "/home/me/src/app", "sha256": "<64 hex characters>" }
+    ]
+  }
+}
+```
+
+An overlay can only add new keys that run commands registered by an
+extension (the `extension` source in `/commands`). It cannot set `prefix` or
+`timeoutMs`, change or remove (`null`) your global bindings, or bind actions,
+events, built-in commands, or plain text. `/share`, `/export`, `/login`,
+`/trust`, and `/quit` are always refused. A project key whose command is not
+a registered extension command is refused with a warning when pressed.
+
+While an overlay is active, pi-prefix shows a notice at startup and the
+status line shows `prefix [project]`.
 
 ### Schema reference
 
@@ -92,8 +126,8 @@ All properties are optional at layer level.
   `super`; aliases `esc`/`return` are normalized to `escape`/`enter`).
 - `timeoutMs` — positive integer; prefix mode clears after this idle time.
   Default `2000`.
-- `bindings` — map of second key id to exactly one target, or `null` to
-  remove an inherited binding:
+- `bindings` — map of second key id to exactly one target (`null` is accepted
+  in the global layer and has no effect there):
   - `{ "action": "app.model.select" }` — a Pi app action. Unknown or
     context-only actions notify when pressed instead of throwing.
   - `{ "command": "/hotkeys", "submit": true }` — a slash command.
@@ -132,6 +166,8 @@ those collisions under **[Extension issues]** and resolves them by load order.
 That limitation is Pi's, not pi-prefix's.
 
 `/pi-prefix` prints active/inactive state, loaded config paths, trust state,
+the project overlay state (`absent`, `untrusted`, `not-allowed`, `changed`,
+`rejected`, or `loaded`),
 effective prefix, timeout, a binding summary, config errors and warnings, and
 any Pi keybinding conflicts.
 
