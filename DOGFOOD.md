@@ -159,30 +159,30 @@ the evidence folder (`overlay-*.json`). Rows P0 to P9 first ran on build
 `80cc7a2` (evidence in `asg732/evidence/`). After the review fixes, the rows
 marked `2026-10-13 r2` ran again on build `527b2d2` on Pi 1.1.0, Pi 1.2.0 and
 the 0.84.4 baseline (evidence in `asg732/evidence-r2/`, file names end in
-`-<Pi version>`). A row not marked `r2` has not run on `527b2d2`. P3, P4, P8
-and P9 have not run again since `80cc7a2`.
+`-<Pi version>`). A row not marked `r2` has not run on `527b2d2`. Rows marked `r3`
+ran on build `2d22e7d` on Pi 1.2.0 (evidence in `asg732/evidence-r3/`).
 
 | ID | Scenario | Steps | Expected | Last verified |
 | --- | --- | --- | --- | --- |
 | P0 | Reference: 0.1.6 behaviour | 0.1.6, overlay that sets `prefix`, removes a global binding, and binds a non-extension command; start; `/pi-prefix`; overlay keys | 0.1.6 applies the overlay without approval (kept as the baseline for P1) | reproduced, v=0.1.6, Pi 1.1.0 (`R0-016-startup`, `R0-016-status`, `R0-016-freetext`) |
 | P1 | Unapproved overlay ignored | same overlay, build under test, start, `/pi-prefix`, overlay keys | warning `not approved; run /pi-prefix allow-project`; state `not-allowed`; global prefix kept; overlay keys do nothing; no model request | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N1-startup`, `N1-status`, `N1-f9x`) and Pi 0.84.4 (`B0-084-hostile`) |
 | P2 | Global bindings unaffected | P1 state, prefix, `p` | global binding `p` still runs | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N1-userp`, `probe.log`) |
-| P3 | Approval refuses scalar or removal | P1 overlay, `/pi-prefix allow-project` | error lists `"prefix" can only be set in the global config` and `cannot remove a user binding`; global file unchanged | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N2-allow-hostile`) |
-| P4 | Approval refuses disallowed targets | overlay with `timeoutMs`, `/share`, `/quit`, an action, an event; `/pi-prefix allow-project` | error lists each reason; nothing written | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N6-blocked`) |
+| P3 | Approval refuses scalar or removal | P1 overlay, `/pi-prefix allow-project` | error lists `"prefix" can only be set in the global config` and `cannot remove a user binding`; global file unchanged | pass, v=0.2.0 pre-release build `2d22e7d`, Pi 1.2.0, 2026-10-13 r3 (`P3-allow-hostile`, `summary.txt`); earlier: `80cc7a2`, Pi 1.1.0 (`N2-allow-hostile`) |
+| P4 | Approval refuses disallowed targets | overlay with `timeoutMs`, `/share`, `/quit`, an action, an event; `/pi-prefix allow-project` | error lists each reason; nothing written | pass, v=0.2.0 pre-release build `2d22e7d`, Pi 1.2.0, 2026-10-13 r3 (`P4-blocked`, `summary.txt`); earlier: `80cc7a2`, Pi 1.1.0 (`N6-blocked`) |
 | P5 | Approval flow | command-only overlay, `/pi-prefix allow-project`; Enter on the default; run again, Down, Enter | dialog lists `w -> /probe-mark` with its extension path and description, plus path and sha256, and **No** is selected first; Enter writes nothing; `Yes, approve` writes one `projectOverlays.allow` entry, keeps mode `600`, leaves no temp file, and asks for `/reload` | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`A1-dialog`, `A2-enter-default`, `A3-approved`) |
 | P6 | Active overlay is visible | start with approved overlay; `/reload`; prefix | notice `project overlay active (...): w -> /probe-mark` at startup and after `/reload`; status `prefix [project]`; armed status `prefix ctrl+\ [project]` | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`A7-start-notice`, `A4-reload-notice`, `A5-armed`). Was partial after `/reload` on `80cc7a2` |
 | P7 | Project extension command | prefix, `w` | `PROBE COMMAND RAN`; probe log `args=""` | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`A6-w`, `probe.log`) |
-| P8 | Project non-extension command refused | prefix, `x` | warning `project binding "x" refused`; no model request | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N3-x`) and Pi 0.84.4 (`B0-084-x`) |
-| P9 | Changed overlay ignored | approved overlay, change one whitespace, start, prefix, `w` | warning `changed since approval`; `w` does nothing | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N5-changed`, `N5-w`) |
+| P8 | Project non-extension command refused | prefix, `x` | warning `project binding "x" refused`; no model request | pass, v=0.2.0 pre-release build `2d22e7d`, Pi 1.2.0, 2026-10-13 r3 (`P8-start`, `P8-x`, `P8-w`; 0 model requests); earlier: `80cc7a2`, Pi 1.1.0 and 0.84.4 |
+| P9 | Changed overlay ignored | approved overlay, change one whitespace, start, prefix, `w` | warning `changed since approval`; `w` does nothing | pass, v=0.2.0 pre-release build `2d22e7d`, Pi 1.2.0, 2026-10-13 r3 (`P9-changed`, `P9-w`); earlier: `80cc7a2`, Pi 1.1.0 |
 | P10 | Untrusted project, approved overlay | approved overlay, `pi --no-approve`, `/pi-prefix`, prefix, `w` | state `untrusted`, `project trusted: no`; `w` is not bound and types `w` | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`P10-start`, `P10-status`, `P10-w`) |
 | P11 | Device symlink overlay | `.pi/pi-prefix.json -> /dev/zero`; start with `--no-approve`; start trusted; `/pi-prefix allow-project` | untrusted: starts normally, no overlay notice; trusted: warning `not a regular file`; approval error `not approvable: not a regular file`; no hang | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`B1-untrusted`, `B1-trusted`, `B1-allow`) |
 | P12 | Odd command spellings refused at approval | overlays binding `/Share`, `//share`, `/share<TAB>x`, `/probe-mark<U+200B>` | `overlay not approvable`; hidden characters shown as escapes (`\u200b`, `\t`) | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`R2-*`). Found on 1.1.0: U+200B printed raw (`R2-zw-before-fix-1.1.0`), fixed in `527b2d2` |
 | P13 | Arguments refused | overlay binding `/probe-mark overlay` | `must be exactly "/name" ... no arguments` | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`R2-_probe_mark_overlay_`) |
 | P14 | Self command refused | overlay binding `/pi-prefix` | `is a blocked command` | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`R2-_pi_prefix_`) |
 | P15 | Prototype key name | global binding key `__proto__` | error `binding key "__proto__" is not a valid key id`; inactive; typing still works | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`R1-start`, `R1-typing`) |
-| P16 | Conflict hides the project marker | approved overlay, global `prefix: ctrl+l` | `pi-prefix disabled: prefix ctrl+l conflicts with app.model.select`; no `[project]` in the status line | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`C1-conflict`) |
+| P16 | Conflict hides the project marker | approved overlay, global `prefix: ctrl+l` | `pi-prefix disabled: prefix ctrl+l conflicts with app.model.select`; no `[project]` in the status line | pass, v=0.2.0 pre-release build `2d22e7d`, Pi 1.2.0, 2026-10-13 r3 with prefix `ctrl+o`: only the `disabled` error, no `overlay active` notice (`C1-conflict`); r2 on `527b2d2` showed both |
 | P17 | Global keys with an active overlay | prefix, `p`; type `draft`, prefix, Escape | probe runs; draft kept | pass, v=0.2.0 pre-release build `527b2d2`, Pi 1.1.0, 1.2.0, 0.84.4, 2026-10-13 r2 (`G1-p`, `G2-escape`) |
-| P18 | Approval from a non-interactive client | RPC or print mode, `/pi-prefix allow-project` | refused; nothing written | not yet run live; covered by unit tests |
+| P18 | Approval from a non-interactive client | RPC or print mode, `/pi-prefix allow-project` | refused; nothing written | pass, v=0.2.0 pre-release build `2d22e7d`, Pi 1.2.0, 2026-10-13 r3: RPC returns `project overlays can only be approved in the interactive terminal UI` (`P18-rpc`); print mode exits 0 with no output (`P18-print`); global file unchanged in both (`summary.txt`) |
 
 ### Prefix key choice
 
@@ -241,10 +241,10 @@ and P9 have not run again since `80cc7a2`.
 
 | Result | Rows |
 | --- | --- |
-| pass | 48 (0.1.x rows) + P1 to P17 (0.2.0 pre-release; see each row for its build) |
+| pass | 48 (0.1.x rows) + P1 to P18 (0.2.0 pre-release; see each row for its build) |
 | partial | 2 (K7, B7) |
 | fail | 0 |
-| not yet run | 1 (P18) |
+| not yet run | 0 |
 | superseded in 0.2.0 | C3, C5, C7 (results kept for 0.1.x) |
 | aggregate (V1) | 1 |
 
