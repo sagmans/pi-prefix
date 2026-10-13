@@ -195,7 +195,7 @@ any Pi keybinding conflicts.
 
 Supports Pi hosts `>=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0`.
 The existing baseline covers 0.84.4, 0.86.1, 0.87.0, and 0.87.1.
-A separate CI job checks Pi 1.1.0 without changing the baseline lockfile.
+The `pre-push` hook also checks Pi 1.1.0 and 1.2.0 in a throwaway copy, without changing the baseline lockfile.
 Other intervening minor versions are not claimed as supported.
 Pi 0.99.1 passed combined stash, history, and prefix smoke checks in regular
 and fullscreen modes, including `/reload`. Pi 1.1.0 passed a live TUI smoke
@@ -230,3 +230,12 @@ npm pack --dry-run   # package-content gate
 ```
 
 Before each release, run the live checks in [DOGFOOD.md](DOGFOOD.md).
+
+## Git hooks
+
+Checks run in tracked local Git hooks instead of push/PR CI. The scripts live in `.githooks/<hook>.d/` and run through the global dotf hooks: the global check runs first, then each script in name order. There is no per-clone setup and no repo-local `core.hooksPath`; if an older setup left one, remove it with `git config --local --unset core.hooksPath`. Repository hooks run only after you review this clone's `.githooks` and trust it with `githooks-trust`; until then only the global checks run. Pre-push checks test exactly each pushed commit: in place only when it is the clean, unmodified checkout, otherwise in a temporary worktree of that commit.
+
+This repository's checks:
+
+- `pre-commit`: staged whitespace and conflict-marker check.
+- `pre-push`: typecheck, tests, `npm audit --audit-level=high`, pack dry-run. The Pi 1.1.0 and 1.2.0 host compatibility matrix stays in CI (`.github/workflows/compat.yml`).

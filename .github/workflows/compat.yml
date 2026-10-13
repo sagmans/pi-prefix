@@ -1,6 +1,8 @@
-# WHY: public contributions need reproducible checks without any publication
+# WHY: the Pi host compatibility matrix stays in CI (not a local hook) because
+# it installs unlocked host releases; the other checks run in local git hooks.
+# Public contributions need reproducible checks without any publication
 # authority; every action is pinned to a reviewed full commit SHA.
-name: ci
+name: compatibility
 
 on:
   pull_request:
@@ -11,25 +13,6 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    runs-on: ubuntu-latest
-    steps:
-      # actions/checkout v7.0.1
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      # actions/setup-node v7.0.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
-        with:
-          node-version: 22
-      # WHY: no dependency in the tree needs lifecycle scripts, so blocking
-      # them removes a whole class of supply-chain install-time code.
-      - run: npm ci --ignore-scripts
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm audit --audit-level=high
-      - run: npm pack --dry-run
-
   # Keep the locked baseline and each supported current host independently
   # verifiable. WHY a matrix: a new host minor can break at import time, so
   # the previous minor stays covered while the newest one is added.
