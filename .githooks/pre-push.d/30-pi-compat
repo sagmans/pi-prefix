@@ -18,7 +18,7 @@ for v in $PI_COMPAT_VERSIONS; do
 	specs=''
 	for p in $PI_PACKAGES; do specs="$specs $PI_SCOPE/$p@$v"; done
 	# shellcheck disable=SC2086 # one argument per package spec
-	npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund $specs >/dev/null
+	npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund $specs >/dev/null || exit 1
 	npm run --silent typecheck
-	npm test --silent >/dev/null
+	npm test --silent
 done
