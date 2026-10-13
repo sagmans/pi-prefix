@@ -275,3 +275,34 @@ test("normalizeKeyId rejects invalid input", () => {
   assert.equal(normalizeKeyId(""), undefined);
   assert.equal(normalizeKeyId("CTRL+X"), undefined);
 });
+
+// Inherited Object names must never resolve as key aliases: they would reach
+// pi-tui's matcher as non-strings and break editor input after the prefix.
+const PROTOTYPE_KEY_NAMES = ["__proto__", "constructor", "toString"];
+
+test("normalizeKeyId rejects inherited object property names", () => {
+  for (const name of PROTOTYPE_KEY_NAMES) {
+    assert.equal(normalizeKeyId(name), undefined, name);
+    assert.equal(normalizeKeyId(`ctrl+${name}`), undefined, name);
+  }
+});
+
+test("inherited object property names fail closed as binding keys and prefix", () => {
+  for (const name of PROTOTYPE_KEY_NAMES) {
+    const asBinding = makeEnv();
+    // WHY: JSON text, not an object literal, so "__proto__" is an own key.
+    writeFileSync(
+      join(asBinding.agentDir, "pi-prefix.json"),
+      `{"prefix":"ctrl+x","bindings":{"${name}":{"command":"/hotkeys","submit":true}}}`,
+    );
+    const bindingResult = asBinding.load(false);
+    assert.equal(bindingResult.config, undefined, name);
+    assert.ok(bindingResult.diagnostics.some((d) => d.level === "error" && d.message.includes("not a valid key id")), name);
+
+    const asPrefix = makeEnv();
+    writeGlobal(asPrefix, { ...GLOBAL_CONFIG, prefix: name });
+    const prefixResult = asPrefix.load(false);
+    assert.equal(prefixResult.config, undefined, name);
+    assert.ok(prefixResult.diagnostics.some((d) => d.level === "error" && d.message.includes("not a valid key id")), name);
+  }
+});

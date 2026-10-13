@@ -185,7 +185,10 @@ export function normalizeKeyId(value: string): KeyId | undefined {
     modifierSet.add("shift");
   } else if (isLetter(rawKey) || isDigit(rawKey)) {
     key = rawKey;
-  } else if (KEY_ALIASES[rawKey] !== undefined) {
+  } else if (Object.hasOwn(KEY_ALIASES, rawKey)) {
+    // WHY: an own-property check keeps inherited names such as "__proto__"
+    // or "constructor" from resolving to Object internals, which would reach
+    // pi-tui's key matcher as a non-string and break editor input.
     key = KEY_ALIASES[rawKey];
   } else if (SPECIAL_KEYS.has(rawKey)) {
     key = rawKey;
