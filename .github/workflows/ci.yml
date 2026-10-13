@@ -33,7 +33,7 @@ jobs:
   # Keep the locked baseline and each supported current host independently
   # verifiable. WHY a matrix: a new host minor can break at import time, so
   # the previous minor stays covered while the newest one is added.
-  compatibility:
+  compatibility-host:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -60,3 +60,15 @@ jobs:
       - run: npm install --no-save --package-lock=false --ignore-scripts @earendil-works/pi-coding-agent@"$PI_VERSION" @earendil-works/pi-tui@"$PI_VERSION" @earendil-works/pi-codemode@"$PI_VERSION" @earendil-works/pi-ai@"$PI_VERSION" @earendil-works/pi-agent-core@"$PI_VERSION" @earendil-works/pi-mcp@"$PI_VERSION" @earendil-works/chord@"$PI_VERSION"
       - run: npm run typecheck
       - run: npm test
+
+  # WHY: branch protection requires one check named "compatibility"; matrix
+  # jobs report per-host names, so this gate passes only if every host passed.
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: compatibility-host
+    if: always()
+    steps:
+      - run: test "$HOST_RESULT" = "success"
+        env:
+          HOST_RESULT: ${{ needs.compatibility-host.result }}
