@@ -70,13 +70,14 @@ Global config (`$RUN/home/.pi/agent/pi-prefix.json`):
 }
 ```
 
-Project overlay (`$RUN/proj/.pi/pi-prefix.json`), used from row C3:
+Project overlay (`$RUN/proj/.pi/pi-prefix.json`), used from row C3. From
+0.2.0 it must be approved with `/pi-prefix allow-project` (rows P1 to P10):
 
 ```json
 {
   "bindings": {
-    "o": null,
-    "w": { "command": "/probe-mark overlay", "submit": true }
+    "w": { "command": "/probe-mark overlay", "submit": true },
+    "x": { "command": "/not-an-extension-command text", "submit": true }
   }
 }
 ```
@@ -138,17 +139,38 @@ Last run: 2026-10-13. Rows run on published 0.1.5 say `v=0.1.5`; rows run on the
 | --- | --- | --- | --- | --- |
 | C1 | No config | remove both config files, start, `/pi-prefix` | `pi-prefix: inactive`; prefix key does nothing | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`30a-C1-no-config`, `30b-C1-prefix-noop`) |
 | C2 | Global only | global config, no overlay, `/pi-prefix` | `active`; all 5 bindings; project path without `(loaded)` | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`04-status`) |
-| C3 | Project overlay after `/reload` | add overlay, `/reload`, `/pi-prefix` | project path `(loaded)`; `o` gone; `w` added | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`13-reload-overlay-status`) |
+| C3 | Project overlay after `/reload` | add overlay, `/reload`, `/pi-prefix` | project path `(loaded)`; `o` gone; `w` added | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`13-reload-overlay-status`) |. Superseded in 0.2.0: see P rows
 | C4 | Overlay binding dispatch | prefix, `w` | probe log `args="overlay"` | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`14-overlay-dispatch`, `probe.log`) |
-| C5 | `null` removal | prefix, `o` with overlay | no event; `o` goes to the editor as text | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`14-overlay-dispatch`) |
+| C5 | `null` removal | prefix, `o` with overlay | no event; `o` goes to the editor as text | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`14-overlay-dispatch`) |. Superseded in 0.2.0: see P rows
 | C6 | Untrusted project | decline trust (`pi --no-approve`), `/pi-prefix` | `project trusted: no`; overlay not loaded | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`45c-C6-no-approve`) |
-| C7 | Overlay overrides scalars | overlay sets `prefix` or `timeoutMs` | overlay value shown in `/pi-prefix` | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`40a-C7-overlay-scalars`, `40c-C7-overlay-f8` to `40e-C7-still-armed-2.5s`) |
+| C7 | Overlay overrides scalars | overlay sets `prefix` or `timeoutMs` | overlay value shown in `/pi-prefix` | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`40a-C7-overlay-scalars`, `40c-C7-overlay-f8` to `40e-C7-still-armed-2.5s`) |. Superseded in 0.2.0: see P rows
 | C8 | Invalid JSON | broken global file, start | error notice with path and `invalid JSON`; inactive | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`31-C8-invalid-json`) |
 | C9 | Invalid prefix key | `"prefix": "notakey"` | error `is not a valid key id`; inactive | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`32-C9-invalid-prefix`) |
 | C10 | Invalid `timeoutMs` | `"timeoutMs": 0` | error `timeoutMs must be a positive integer`; inactive | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`33-C10-timeout-zero`) |
 | C11 | Invalid target | binding with two kinds, unknown property, command without `/`, payload on non-event | matching error; whole config inactive | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`34-C11-invalid-targets`, `34b`, `34c`, `34d`). Only the first invalid binding is reported per load |
 | C12 | Prefix without bindings | `prefix` only | inactive; no error | pass, v=0.1.5, Pi 1.1.0, 2026-10-13 (`35-C12-prefix-only`) |
 | C13 | Status while inactive | invalid config, `/pi-prefix` | `inactive` plus each `error:` line | pass, v=0.1.6 (pre-release build `8d39dbe`), Pi 1.1.0, 2026-10-13 (`52-fix-ASG-731-status-errors`); 0.1.5 showed no reason (`31` to `33`) |
+
+### Project overlay opt-in (0.2.0)
+
+Run in a project whose `.pi/` holds only `pi-prefix.json`. Use a second Pi
+home with the build under test installed from a local path. For the
+reference row, use a home with the published 0.1.6. Example overlays are in
+the evidence folder (`overlay-*.json`). All rows ran on 2026-10-13 (evidence in `asg732/evidence/`).
+
+| ID | Scenario | Steps | Expected | Last verified |
+| --- | --- | --- | --- | --- |
+| P0 | Reference: 0.1.6 behaviour | 0.1.6, overlay that sets `prefix`, removes a global binding, and binds a non-extension command; start; `/pi-prefix`; overlay keys | 0.1.6 applies the overlay without approval (kept as the baseline for P1) | reproduced, v=0.1.6, Pi 1.1.0 (`R0-016-startup`, `R0-016-status`, `R0-016-freetext`) |
+| P1 | Unapproved overlay ignored | same overlay, build under test, start, `/pi-prefix`, overlay keys | warning `not approved; run /pi-prefix allow-project`; state `not-allowed`; global prefix kept; overlay keys do nothing; no model request | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N1-startup`, `N1-status`, `N1-f9x`) and Pi 0.84.4 (`B0-084-hostile`) |
+| P2 | Global bindings unaffected | P1 state, prefix, `p` | global binding `p` still runs | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N1-userp`, `probe.log`) |
+| P3 | Approval refuses scalar or removal | P1 overlay, `/pi-prefix allow-project` | error lists `"prefix" can only be set in the global config` and `cannot remove a user binding`; global file unchanged | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N2-allow-hostile`) |
+| P4 | Approval refuses disallowed targets | overlay with `timeoutMs`, `/share`, `/quit`, an action, an event; `/pi-prefix allow-project` | error lists each reason; nothing written | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N6-blocked`) |
+| P5 | Approval flow | command-only overlay, `/pi-prefix allow-project`; Escape; run again, Yes | dialog shows path, sha256 and content; Escape writes nothing; Yes writes one `projectOverlays.allow` entry and asks for `/reload` | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N3-confirm`, `N3-cancel`, `N3-approved`) and Pi 0.84.4 (`B0-084-confirm`, `B0-084-approve`) |
+| P6 | Active overlay is visible | start with approved overlay; prefix | startup notice `project overlay active` with keys; status `prefix [project]`; armed status `prefix ctrl+\ [project]` | pass on start, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N4-fresh-start`, `N3-armed`) and Pi 0.84.4 (`B0-084-loaded`). Partial after `/reload`: marker shown, notice not visible (`N3-reload`) |
+| P7 | Project extension command | prefix, `w` | probe log `args="overlay"` | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N3-w`) and Pi 0.84.4 (`probe.log`) |
+| P8 | Project non-extension command refused | prefix, `x` | warning `project binding "x" refused`; no model request | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N3-x`) and Pi 0.84.4 (`B0-084-x`) |
+| P9 | Changed overlay ignored | approved overlay, change one whitespace, start, prefix, `w` | warning `changed since approval`; `w` does nothing | pass, v=0.2.0 pre-release build `80cc7a2`, Pi 1.1.0 (`N5-changed`, `N5-w`) |
+| P10 | Untrusted project, approved overlay | approved overlay, `pi --no-approve` | state `untrusted`; overlay not loaded | not yet run live; covered by config tests |
 
 ### Prefix key choice
 
@@ -206,10 +228,11 @@ Last run: 2026-10-13. Rows run on published 0.1.5 say `v=0.1.5`; rows run on the
 
 | Result | Rows |
 | --- | --- |
-| pass | 48 |
-| partial | 2 (K7, B7) |
+| pass | 48 + 9 (P1 to P9, 0.2.0 pre-release) |
+| partial | 2 (K7, B7); P6 is partial after `/reload` only |
 | fail | 0 |
-| not yet run | 0 |
+| not yet run | 1 (P10) |
+| superseded in 0.2.0 | C3, C5, C7 (results kept for 0.1.x) |
 | aggregate (V1) | 1 |
 
 Findings from this run: the inactive status gave no reason for an invalid config (fixed in 0.1.6, row C13), and insert-only bindings replace the draft (now stated in the README).
