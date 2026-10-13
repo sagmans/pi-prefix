@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { hashOverlay, loadConfig, normalizeKeyId } from "../src/config.ts";
+import { hashOverlay, loadConfig, MAX_OVERLAY_BYTES, normalizeKeyId } from "../src/config.ts";
 
 type Env = {
   agentDir: string;
@@ -347,4 +348,66 @@ test("overlay pins distinguish invalid byte sequences that decode alike", () => 
   const second = Buffer.from([0xfe]);
   assert.equal(first.toString("utf8"), second.toString("utf8"));
   assert.notEqual(hashOverlay(first), hashOverlay(second));
+});
+
+// A repository controls its overlay path; device, FIFO, or oversized files
+// must be refused without hanging and must never be opened when untrusted.
+function linkOverlay(env: Env, target: string): void {
+  mkdirSync(join(env.projectDir, ".pi"), { recursive: true });
+  symlinkSync(target, join(env.projectDir, ".pi", "pi-prefix.json"));
+}
+
+test("untrusted project overlay is never opened, even a device symlink", () => {
+  const env = makeEnv();
+  writeGlobal(env, GLOBAL_CONFIG);
+  linkOverlay(env, "/dev/zero");
+  const result = env.load(false);
+  assert.equal(result.projectState, "untrusted");
+  assert.equal(result.config?.bindings.size, 3);
+});
+
+test("trusted overlay that is not a bounded regular file is refused", () => {
+  const fifoEnv = makeEnv();
+  mkdirSync(join(fifoEnv.projectDir, ".pi"), { recursive: true });
+  execFileSync("mkfifo", [join(fifoEnv.projectDir, ".pi", "pi-prefix.json")]);
+  const cases: Env[] = [fifoEnv];
+  for (const target of ["/dev/zero", "/dev/null", "/dev/stdin"]) {
+    const env = makeEnv();
+    linkOverlay(env, target);
+    cases.push(env);
+  }
+  const big = makeEnv();
+  writeProject(big, { bindings: { w: { command: "/p", submit: true } }, pad: "x".repeat(MAX_OVERLAY_BYTES) });
+  cases.push(big);
+  for (const env of cases) {
+    writeGlobal(env, GLOBAL_CONFIG);
+    const result = env.load(true);
+    assert.equal(result.projectState, "rejected");
+    assert.equal(result.config?.bindings.size, 3);
+  }
+});
+
+test("overlay may not bind a key the user removed with null", () => {
+  const env = makeEnv();
+  writeProject(env, PROJECT_OVERLAY);
+  approve(env, { ...GLOBAL_CONFIG, bindings: { ...GLOBAL_CONFIG.bindings, w: null } });
+  assert.equal(env.load(true).projectState, "rejected");
+});
+
+test("approval entries with bad shapes fail closed", () => {
+  for (const projectOverlays of [
+    [],
+    { allow: {} },
+    { allow: [{ path: "relative/dir", sha256: "a".repeat(64) }] },
+    { allow: [{ path: "/abs", sha256: "A".repeat(64) }] },
+    { allow: [{ path: "/abs", sha256: "a".repeat(63) }] },
+    { allow: [{ path: "/abs", sha256: "a".repeat(64), extra: true }] },
+    { allow: [], other: 1 },
+  ]) {
+    const env = makeEnv();
+    writeGlobal(env, { ...GLOBAL_CONFIG, projectOverlays });
+    const result = env.load(false);
+    assert.equal(result.config, undefined, JSON.stringify(projectOverlays));
+    assert.ok(result.diagnostics.some((d) => d.level === "error"));
+  }
 });

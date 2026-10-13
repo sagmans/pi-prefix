@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // WHY: rebranded Pi distributions may rename the project config directory;
@@ -147,6 +147,13 @@ const ESCAPE_KEY = "escape";
 const DEFAULT_TIMEOUT_MS = 2000;
 const CONFIG_FILE_NAME = "pi-prefix.json";
 const TEXT_ENCODING = "utf8";
+// WHY: a repository controls its overlay path, so the file is read only if it
+// is a regular file of bounded size; a symlink to a device such as /dev/zero
+// or a FIFO would otherwise hang Pi or exhaust memory at startup.
+export const MAX_OVERLAY_BYTES = 64 * 1024;
+// WHY non-blocking: opening a FIFO must not wait for a writer before the
+// regular-file check can refuse it.
+const OVERLAY_OPEN_FLAGS = constants.O_RDONLY | constants.O_NONBLOCK;
 
 const DEFAULTS_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -464,12 +471,56 @@ function readRaw(path: string): string | undefined {
   }
 }
 
-function readBytes(path: string): Buffer | undefined {
+/** Result of a guarded overlay read: bytes, nothing there, or a refusal. */
+export type OverlayRead =
+  | { kind: "absent" }
+  | { kind: "refused"; reason: string }
+  | { kind: "bytes"; bytes: Buffer };
+
+/** Whether something exists at the overlay path, without opening it. */
+export function overlayExists(path: string): boolean {
   try {
-    return readFileSync(path);
+    lstatSync(path);
+    return true;
   } catch {
-    // WHY: absence is ordinary; only malformed content is a diagnostic.
-    return undefined;
+    return false;
+  }
+}
+
+/**
+ * Read a project overlay through one guarded path. WHY: the loader and the
+ * approval command must apply the same limits; checks run on the opened
+ * descriptor so the file cannot be swapped between check and read.
+ */
+export function readOverlayFile(path: string): OverlayRead {
+  let fd: number;
+  try {
+    fd = openSync(path, OVERLAY_OPEN_FLAGS);
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT"
+      ? { kind: "absent" }
+      : { kind: "refused", reason: `cannot open: ${(error as Error).message}` };
+  }
+  try {
+    const stats = fstatSync(fd);
+    if (!stats.isFile()) return { kind: "refused", reason: "not a regular file" };
+    if (stats.size > MAX_OVERLAY_BYTES) {
+      return { kind: "refused", reason: `larger than ${MAX_OVERLAY_BYTES} bytes` };
+    }
+    // WHY one extra byte: detects growth after fstat without reading more.
+    const buffer = Buffer.alloc(MAX_OVERLAY_BYTES + 1);
+    let length = 0;
+    for (;;) {
+      const read = readSync(fd, buffer, length, buffer.length - length, null);
+      if (read === 0) break;
+      length += read;
+      if (length > MAX_OVERLAY_BYTES) {
+        return { kind: "refused", reason: `larger than ${MAX_OVERLAY_BYTES} bytes` };
+      }
+    }
+    return { kind: "bytes", bytes: buffer.subarray(0, length) };
+  } finally {
+    closeSync(fd);
   }
 }
 
@@ -534,6 +585,66 @@ export function parseProjectOverlay(
   return problems.length > 0 ? { problems } : { layer, problems };
 }
 
+/**
+ * Decide whether trusted overlay bytes apply. WHY separate: keeps the
+ * approval and parse rules in one place, after the guarded read.
+ */
+function evaluateApprovedOverlay(
+  projectBytes: Buffer,
+  projectPath: string,
+  cwd: string,
+  globalLayer: ParsedLayer | undefined,
+): { state: ProjectOverlayState; layer?: ParsedLayer; diagnostics: ConfigDiagnostic[] } {
+  const diagnostics: ConfigDiagnostic[] = [];
+  // WHY: Pi trust alone is vacuously true for some projects, so it is a
+  // necessary gate but never consent; consent is the pinned global entry.
+  const realPath = canonicalProjectPath(cwd);
+  const approval = globalLayer?.approvals?.find((entry) => entry.path === realPath);
+  if (approval === undefined) {
+    diagnostics.push({
+      level: "warning",
+      path: projectPath,
+      message: "project overlay ignored: not approved; run /pi-prefix allow-project to review and approve it",
+    });
+    return { state: "not-allowed", diagnostics };
+  }
+  if (approval.sha256 !== hashOverlay(projectBytes)) {
+    diagnostics.push({
+      level: "warning",
+      path: projectPath,
+      message: "project overlay ignored: changed since approval; run /pi-prefix allow-project to review it again",
+    });
+    return { state: "changed", diagnostics };
+  }
+  const parsed = parseProjectOverlay(projectBytes.toString(TEXT_ENCODING), projectPath, globalLayer?.bindings);
+  if (parsed.layer === undefined) {
+    // WHY: warnings, not errors, so a bad overlay can never disable the
+    // user's own working global keymap.
+    for (const problem of parsed.problems) {
+      diagnostics.push({ level: "warning", path: projectPath, message: `project overlay ignored: ${problem}` });
+    }
+    return { state: "rejected", diagnostics };
+  }
+  return { state: "loaded", layer: parsed.layer, diagnostics };
+}
+
+/**
+ * The user's own binding keys, including keys they removed with null. WHY:
+ * approval and loading must agree on which keys an overlay may not touch;
+ * the effective map drops nulls and is empty when the extension is inactive.
+ */
+export function readUserBindings(agentDir: string): {
+  bindings?: ReadonlyMap<KeyId, PrefixTarget | null>;
+  errors: string[];
+} {
+  const diagnostics: ConfigDiagnostic[] = [];
+  const layer = readLayer(join(agentDir, CONFIG_FILE_NAME), false, diagnostics);
+  return {
+    bindings: layer?.bindings,
+    errors: diagnostics.filter((d) => d.level === "error").map((d) => d.message),
+  };
+}
+
 export function loadConfig(options: LoadConfigOptions): LoadConfigResult {
   const diagnostics: ConfigDiagnostic[] = [];
   const globalPath = join(options.agentDir, CONFIG_FILE_NAME);
@@ -543,42 +654,20 @@ export function loadConfig(options: LoadConfigOptions): LoadConfigResult {
   const globalLayer = readLayer(globalPath, false, diagnostics);
   let projectLayer: ParsedLayer | undefined;
   let projectState: ProjectOverlayState = "absent";
-  const projectBytes = readBytes(projectPath);
-  if (projectBytes !== undefined) {
-    const projectRaw = projectBytes.toString(TEXT_ENCODING);
-    // WHY: Pi trust alone is vacuously true for some projects, so it is a
-    // necessary gate but never consent; consent is the pinned global entry.
-    const realPath = canonicalProjectPath(options.cwd);
-    const approval = globalLayer?.approvals?.find((entry) => entry.path === realPath);
-    if (!options.projectTrusted) {
-      projectState = "untrusted";
-    } else if (approval === undefined) {
-      projectState = "not-allowed";
-      diagnostics.push({
-        level: "warning",
-        path: projectPath,
-        message: "project overlay ignored: not approved; run /pi-prefix allow-project to review and approve it",
-      });
-    } else if (approval.sha256 !== hashOverlay(projectBytes)) {
-      projectState = "changed";
-      diagnostics.push({
-        level: "warning",
-        path: projectPath,
-        message: "project overlay ignored: changed since approval; run /pi-prefix allow-project to review it again",
-      });
-    } else {
-      const parsed = parseProjectOverlay(projectRaw, projectPath, globalLayer?.bindings);
-      if (parsed.layer === undefined) {
-        projectState = "rejected";
-        // WHY: warnings, not errors, so a bad overlay can never disable the
-        // user's own working global keymap.
-        for (const problem of parsed.problems) {
-          diagnostics.push({ level: "warning", path: projectPath, message: `project overlay ignored: ${problem}` });
-        }
-      } else {
-        projectLayer = parsed.layer;
-        projectState = "loaded";
-      }
+  // WHY trust first: an untrusted project's overlay is never opened, so its
+  // content or file type cannot affect the session at all.
+  if (!options.projectTrusted) {
+    if (overlayExists(projectPath)) projectState = "untrusted";
+  } else {
+    const read = readOverlayFile(projectPath);
+    if (read.kind === "refused") {
+      projectState = "rejected";
+      diagnostics.push({ level: "warning", path: projectPath, message: `project overlay ignored: ${read.reason}` });
+    } else if (read.kind === "bytes") {
+      const evaluated = evaluateApprovedOverlay(read.bytes, projectPath, options.cwd, globalLayer);
+      projectState = evaluated.state;
+      projectLayer = evaluated.layer;
+      diagnostics.push(...evaluated.diagnostics);
     }
   }
 
