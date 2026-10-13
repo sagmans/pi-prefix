@@ -30,12 +30,19 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm pack --dry-run
 
-  # Keep the locked baseline and the current host independently verifiable.
+  # Keep the locked baseline and each supported current host independently
+  # verifiable. WHY a matrix: a new host minor can break at import time, so
+  # the previous minor stays covered while the newest one is added.
   compatibility:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        pi-version: ["1.1.0", "1.2.0"]
+    name: compatibility (Pi ${{ matrix.pi-version }})
     env:
-      PI_VERSION: "1.1.0"
+      PI_VERSION: ${{ matrix.pi-version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
