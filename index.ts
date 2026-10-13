@@ -45,6 +45,7 @@ const INTERACTIVE_MODE = "tui";
 // characters raw; those are escaped too so nothing in the dialog is hidden.
 const HIDDEN_TEXT_PATTERN = /[\p{Cf}\u0080-\u009f\u2028\u2029]/gu;
 const UNREGISTERED_COMMAND_NOTE = "not a registered extension command; will be refused";
+const OVERLAY_NOTICE_LEVEL = "warning";
 const PROJECT_IDLE_STATUS = `prefix ${PROJECT_STATUS_MARKER}`;
 const JSON_INDENT = 2;
 const TEXT_ENCODING = "utf8";
@@ -322,9 +323,19 @@ export function setupPiPrefix(
     inactiveResult = undefined;
     const overlayActive = result.config.projectKeys.size > 0;
     if (overlayActive) {
-      // WHY: repository-defined keys must be visible when they go live.
-      const keys = [...result.config.projectKeys].join(", ");
-      ctx.ui.notify(`pi-prefix: project overlay active (${result.projectPath}): ${keys}`, "info");
+      // WHY: repository-defined keys must be visible when they go live, with
+      // what each one runs, not just which keys exist.
+      const projectBindings = [...result.config.projectKeys].map((key) => {
+        const target = result.config?.bindings.get(key);
+        return `${key} -> ${target !== undefined && "command" in target ? target.command : "?"}`;
+      });
+      // WHY warning: Pi shows info notices in one status line that the next
+      // status (such as /reload's "Reloaded ...") overwrites in place, which
+      // hid this notice after a reload.
+      ctx.ui.notify(
+        `pi-prefix: project overlay active (${result.projectPath}): ${projectBindings.join(", ")}`,
+        OVERLAY_NOTICE_LEVEL,
+      );
       ctx.ui.setStatus(STATUS_KEY, PROJECT_IDLE_STATUS);
     }
     state = {
