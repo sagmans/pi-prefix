@@ -32,7 +32,7 @@
     "SECURITY.md"
   ],
   "scripts": {
-    "test": "node --experimental-transform-types --test test/*.test.ts",
+    "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
