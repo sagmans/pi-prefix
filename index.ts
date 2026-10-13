@@ -42,6 +42,7 @@ const APPROVE_ACCEPT_OPTION = "Yes, approve";
 const INTERACTIVE_MODE = "tui";
 const PROJECT_IDLE_STATUS = `prefix ${PROJECT_STATUS_MARKER}`;
 const JSON_INDENT = 2;
+const TEXT_ENCODING = "utf8";
 // WHY: write-then-rename keeps the user's global config whole if Pi exits
 // mid-write.
 const TEMP_SUFFIX = ".tmp";
@@ -137,16 +138,17 @@ async function allowProject(ctx: ExtensionContext, globalPath: string, projectPa
     ctx.ui.notify("pi-prefix: trust this project in Pi before approving its overlay", "error");
     return;
   }
-  let raw: string;
+  let bytes: Buffer;
   try {
-    raw = readFileSync(projectPath, "utf8");
+    bytes = readFileSync(projectPath);
   } catch {
     ctx.ui.notify(`pi-prefix: no project overlay at ${projectPath}`, "error");
     return;
   }
+  const raw = bytes.toString(TEXT_ENCODING);
   let globalConfig: Record<string, unknown> = {};
   try {
-    globalConfig = JSON.parse(readFileSync(globalPath, "utf8")) as Record<string, unknown>;
+    globalConfig = JSON.parse(readFileSync(globalPath, TEXT_ENCODING)) as Record<string, unknown>;
   } catch (error) {
     // WHY: never overwrite a global config we could not parse.
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -160,7 +162,7 @@ async function allowProject(ctx: ExtensionContext, globalPath: string, projectPa
     ctx.ui.notify(`pi-prefix: overlay not approvable: ${parsed.problems.join("; ")}`, "error");
     return;
   }
-  const approval: ProjectOverlayApproval = { path: canonicalProjectPath(ctx.cwd), sha256: hashOverlay(raw) };
+  const approval: ProjectOverlayApproval = { path: canonicalProjectPath(ctx.cwd), sha256: hashOverlay(bytes) };
   const choice = await ctx.ui.select(
     ["Approve pi-prefix project overlay?", `project: ${approval.path}`, `sha256: ${approval.sha256}`, "", raw].join("\n"),
     [APPROVE_DECLINE_OPTION, APPROVE_ACCEPT_OPTION],

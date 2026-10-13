@@ -340,3 +340,11 @@ test("plain lowercase extension command names load from an approved overlay", ()
     assert.equal(env.load(true).projectState, "loaded", command);
   }
 });
+
+test("overlay pins distinguish invalid byte sequences that decode alike", () => {
+  // WHY: both decode to U+FFFD, so a text hash would give them one pin.
+  const first = Buffer.from([0xff]);
+  const second = Buffer.from([0xfe]);
+  assert.equal(first.toString("utf8"), second.toString("utf8"));
+  assert.notEqual(hashOverlay(first), hashOverlay(second));
+});

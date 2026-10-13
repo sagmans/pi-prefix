@@ -146,6 +146,7 @@ const TARGET_PROPERTIES = [...TARGET_KEYS, "submit", "payload"] as const;
 const ESCAPE_KEY = "escape";
 const DEFAULT_TIMEOUT_MS = 2000;
 const CONFIG_FILE_NAME = "pi-prefix.json";
+const TEXT_ENCODING = "utf8";
 
 const DEFAULTS_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -318,8 +319,12 @@ export function projectCommandProblem(command: string): string | undefined {
   return undefined;
 }
 
-/** Hash overlay bytes exactly as read, so any edit invalidates an approval. */
-export function hashOverlay(raw: string): string {
+/**
+ * Hash overlay bytes exactly as read, so any edit invalidates an approval.
+ * WHY bytes: decoding first would let distinct invalid byte sequences
+ * collapse to the same replacement character and share one pin.
+ */
+export function hashOverlay(raw: Uint8Array | string): string {
   return createHash(HASH_ALGORITHM).update(raw).digest(HASH_ENCODING);
 }
 
@@ -452,7 +457,16 @@ function parseLayer(
 
 function readRaw(path: string): string | undefined {
   try {
-    return readFileSync(path, "utf8");
+    return readFileSync(path, TEXT_ENCODING);
+  } catch {
+    // WHY: absence is ordinary; only malformed content is a diagnostic.
+    return undefined;
+  }
+}
+
+function readBytes(path: string): Buffer | undefined {
+  try {
+    return readFileSync(path);
   } catch {
     // WHY: absence is ordinary; only malformed content is a diagnostic.
     return undefined;
@@ -474,7 +488,9 @@ function readLayer(
  */
 export function canonicalProjectPath(cwd: string): string {
   try {
-    return realpathSync(cwd);
+    // WHY native: on case-insensitive macOS volumes the JS realpath keeps the
+    // typed case, so one directory could miss its own approval.
+    return realpathSync.native(cwd);
   } catch {
     return cwd;
   }
@@ -527,8 +543,9 @@ export function loadConfig(options: LoadConfigOptions): LoadConfigResult {
   const globalLayer = readLayer(globalPath, false, diagnostics);
   let projectLayer: ParsedLayer | undefined;
   let projectState: ProjectOverlayState = "absent";
-  const projectRaw = readRaw(projectPath);
-  if (projectRaw !== undefined) {
+  const projectBytes = readBytes(projectPath);
+  if (projectBytes !== undefined) {
+    const projectRaw = projectBytes.toString(TEXT_ENCODING);
     // WHY: Pi trust alone is vacuously true for some projects, so it is a
     // necessary gate but never consent; consent is the pinned global entry.
     const realPath = canonicalProjectPath(options.cwd);
@@ -542,7 +559,7 @@ export function loadConfig(options: LoadConfigOptions): LoadConfigResult {
         path: projectPath,
         message: "project overlay ignored: not approved; run /pi-prefix allow-project to review and approve it",
       });
-    } else if (approval.sha256 !== hashOverlay(projectRaw)) {
+    } else if (approval.sha256 !== hashOverlay(projectBytes)) {
       projectState = "changed";
       diagnostics.push({
         level: "warning",
