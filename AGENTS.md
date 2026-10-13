@@ -21,4 +21,4 @@ use the disposable `HOME` from the DOGFOOD.md setup.
 
 ## Git hooks
 
-Checks run in `.githooks/`, not in push/PR CI. Run `sh scripts/setup-hooks.sh` once per clone; never bypass hooks with `--no-verify`. `pre-push`: typecheck, tests, `npm audit --audit-level=high`, pack dry-run, then Pi 1.1.0 and 1.2.0 compatibility in a throwaway copy.
+Checks run in `.githooks/`, not in push/PR CI. The global dotf hooks run `.githooks/<hook>.d/` once a human trusts the clone with `githooks-trust`; agents never write the trust store or drive `githooks-trust`. Never bypass hooks with `--no-verify`. `pre-push`: typecheck, tests, `npm audit --audit-level=high`, pack dry-run. The Pi 1.1.0 and 1.2.0 host compatibility matrix stays in CI (`.github/workflows/compat.yml`).
