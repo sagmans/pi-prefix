@@ -19,7 +19,7 @@ function makeConfig(overrides: Record<string, PrefixTarget> = {}): EffectivePref
   const bindings = new Map<KeyId, PrefixTarget>(
     Object.entries(targets) as [KeyId, PrefixTarget][],
   );
-  return { prefix: "ctrl+x", timeoutMs: 2000, bindings };
+  return { prefix: "ctrl+x", timeoutMs: 2000, bindings, projectKeys: new Set<KeyId>() };
 }
 
 type InnerCalls = {
@@ -70,6 +70,7 @@ function makeInner() {
 function makeEditor(
   config = makeConfig(),
   dispatchExtensionCommandHandler: (command: string) => boolean = () => false,
+  isExtensionCommand: (command: string) => boolean = () => false,
 ) {
   const { inner, calls } = makeInner();
   const statuses: Array<string | undefined> = [];
@@ -90,6 +91,7 @@ function makeEditor(
       dispatches.push(command);
       return dispatchExtensionCommandHandler(command);
     },
+    isExtensionCommand,
   });
   return { editor, inner, calls, statuses, notifications, events, dispatches };
 }
@@ -269,4 +271,67 @@ test("disposal makes the wrapper transparent", () => {
   editor.activate();
   editor.handleInput("m");
   assert.deepEqual(calls.input, ["m"]);
+});
+
+// Project-overlay keys: anything but a registered, argument-free extension
+// command must be refused before the editor or submit path sees it.
+const REGISTERED_EXTENSION_COMMAND = "/probe-mark";
+
+function makeProjectEditor(target: PrefixTarget) {
+  const config = makeConfig({ w: target });
+  const projectConfig: EffectivePrefixConfig = { ...config, projectKeys: new Set<KeyId>(["w" as KeyId]) };
+  return makeEditor(
+    projectConfig,
+    () => true,
+    (command) => command === REGISTERED_EXTENSION_COMMAND,
+  );
+}
+
+test("refused project keys never reach the editor or dispatch", () => {
+  for (const command of [
+    "/hotkeys",
+    "/share",
+    "/unknown-command",
+    "/ please run rm -rf ~",
+    "/probe-mark overlay",
+    "/Probe-mark",
+    "//probe-mark",
+    "/probe-mark\u200b",
+    "/pi-prefix",
+  ]) {
+    for (const submit of [true, false]) {
+      const { editor, calls, dispatches, notifications } = makeProjectEditor({ command, submit });
+      editor.activate();
+      editor.handleInput("w");
+      assert.deepEqual(calls.texts, [], command);
+      assert.deepEqual(calls.input, [], command);
+      assert.deepEqual(dispatches, [], command);
+      assert.ok(notifications.some((n) => n.message.includes("refused")), command);
+    }
+  }
+});
+
+test("refused project action and event keys never run", () => {
+  for (const target of [{ action: "app.exit" }, { event: "x:y" }] as PrefixTarget[]) {
+    const { editor, calls, dispatches, events, notifications } = makeProjectEditor(target);
+    editor.activate();
+    editor.handleInput("w");
+    assert.deepEqual(calls.texts, []);
+    assert.deepEqual(calls.input, []);
+    assert.deepEqual(dispatches, []);
+    assert.deepEqual(events, []);
+    assert.ok(notifications.some((n) => n.message.includes("refused")));
+  }
+});
+
+test("registered extension command on a project key dispatches", () => {
+  const { editor, calls, dispatches, notifications } = makeProjectEditor({
+    command: REGISTERED_EXTENSION_COMMAND,
+    submit: true,
+  });
+  editor.activate();
+  editor.handleInput("w");
+  assert.deepEqual(dispatches, [REGISTERED_EXTENSION_COMMAND]);
+  assert.deepEqual(calls.texts, []);
+  assert.deepEqual(notifications, []);
 });

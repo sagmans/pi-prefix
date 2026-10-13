@@ -8,6 +8,7 @@ import type {
   KeyId,
   TUI,
 } from "@earendil-works/pi-tui";
+import { projectCommandProblem } from "./config.ts";
 import type { EffectivePrefixConfig, PrefixTarget } from "./config.ts";
 
 export type PrefixEditorOptions = {
@@ -18,7 +19,16 @@ export type PrefixEditorOptions = {
   // WHY: editor-independent commands must not sacrifice the user's draft, so
   // the host decides whether direct dispatch applies before any setText.
   dispatchExtensionCommand: (command: string) => boolean;
+  // WHY: project-overlay keys may only reach registered extension commands;
+  // the registry lives in the host, so the editor asks instead of guessing.
+  isExtensionCommand: (command: string) => boolean;
+  // WHY: while a project overlay is active the status bar keeps a marker so
+  // users can tell repository-defined keys are live.
+  idleStatus?: string;
 };
+
+// WHY: shared with the host so the armed and idle markers read the same.
+export const PROJECT_STATUS_MARKER = "[project]";
 
 // WHY: Pi wires these three app actions through replaceable callbacks rather
 // than the ordinary actionHandlers map; dispatch must honor the same paths.
@@ -116,7 +126,8 @@ export class PrefixEditor extends CustomEditor {
     this.prefixActive = true;
     if (this.prefixTimer) clearTimeout(this.prefixTimer);
     this.prefixTimer = setTimeout(() => this.clearPrefix(), this.options.config.timeoutMs);
-    this.options.setStatus(`prefix ${this.options.config.prefix}`);
+    const marker = this.options.config.projectKeys.size > 0 ? ` ${PROJECT_STATUS_MARKER}` : "";
+    this.options.setStatus(`prefix ${this.options.config.prefix}${marker}`);
     this.appTui.requestRender();
   }
 
@@ -127,7 +138,7 @@ export class PrefixEditor extends CustomEditor {
       clearTimeout(this.prefixTimer);
       this.prefixTimer = undefined;
     }
-    this.options.setStatus(undefined);
+    this.options.setStatus(this.options.idleStatus);
     if (wasActive) this.appTui.requestRender();
   }
 
@@ -143,7 +154,24 @@ export class PrefixEditor extends CustomEditor {
     }
   }
 
-  private dispatch(target: PrefixTarget): void {
+  private dispatch(target: PrefixTarget, keyId: KeyId): void {
+    if (this.options.config.projectKeys.has(keyId)) {
+      // WHY: a repository-defined key must never turn into free text or a
+      // built-in command, so anything but a registered extension command is
+      // refused instead of falling back to the editor submit path.
+      // The load-time rule is re-checked here as defense in depth.
+      if (
+        !("command" in target) ||
+        projectCommandProblem(target.command) !== undefined ||
+        !this.options.isExtensionCommand(target.command)
+      ) {
+        this.options.notify(
+          `pi-prefix: project binding "${keyId}" refused: only registered extension commands are allowed`,
+          "warning",
+        );
+        return;
+      }
+    }
     if ("action" in target) {
       const action = target.action as AppKeybinding;
       const handler =
@@ -200,7 +228,7 @@ export class PrefixEditor extends CustomEditor {
       for (const [keyId, target] of this.options.config.bindings) {
         if (matchesKey(data, keyId)) {
           this.clearPrefix();
-          this.dispatch(target);
+          this.dispatch(target, keyId);
           return;
         }
       }
@@ -214,6 +242,9 @@ export class PrefixEditor extends CustomEditor {
   dispose(): void {
     this.disposed = true;
     this.clearPrefix();
+    // WHY: a disposed wrapper (shutdown or a prefix conflict) dispatches
+    // nothing, so leaving the "[project]" marker would claim live keys.
+    this.options.setStatus(undefined);
   }
 
   render(width: number): string[] {
