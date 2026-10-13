@@ -90,9 +90,11 @@ are true:
 2. Your global config approves this project path and the exact overlay
    content.
 
-To approve, open Pi in the project and run `/pi-prefix allow-project`. Pi
-shows the project path, the overlay's sha256, and its content. If you
-confirm, pi-prefix adds an entry to `projectOverlays.allow` in your global
+To approve, open Pi's interactive terminal UI in the project and run
+`/pi-prefix allow-project`. Pi shows the project path, the overlay's sha256,
+and each key with the command it runs and the extension that owns it. The
+answer defaults to **No**; choose **Yes, approve** to accept. pi-prefix then
+adds an entry to `projectOverlays.allow` in your global
 config. Run `/reload` to apply it. If the overlay file changes later,
 pi-prefix ignores it and asks you to approve it again. To revoke, remove the
 entry from your global config.
@@ -108,14 +110,23 @@ entry from your global config.
 ```
 
 An overlay can only add new keys that run commands registered by an
-extension (the `extension` source in `/commands`). It cannot set `prefix` or
-`timeoutMs`, change or remove (`null`) your global bindings, or bind actions,
-events, built-in commands, or plain text. `/share`, `/export`, `/login`,
-`/trust`, and `/quit` are always refused. A project key whose command is not
-a registered extension command is refused with a warning when pressed.
+extension (the `extension` source in `/commands`). Each command must be
+exactly `/name`, with lowercase letters, digits, `:`, `_` or `-` and no
+arguments. It cannot set `prefix` or `timeoutMs`, change or remove (`null`)
+your global bindings, or bind actions, events, built-in commands, or plain
+text. `/share`, `/export`, `/login`, `/trust`, `/quit`, and `/pi-prefix` are
+always refused, and only registered extension commands run. A project key
+whose command is not a registered extension command is refused with a
+warning when pressed.
 
-While an overlay is active, pi-prefix shows a notice at startup and the
-status line shows `prefix [project]`.
+While an overlay is active, pi-prefix shows a notice at startup and after
+`/reload` that lists each project key and its command, and the status line
+shows `prefix [project]`.
+
+Your global config (`~/.pi/agent/pi-prefix.json`) is the trust anchor for
+project overlays. Anything that can write that file can approve an overlay,
+including an agent session that has file-write or shell tools. Do not let
+an agent edit this file on behalf of a repository you do not trust.
 
 ### Schema reference
 
