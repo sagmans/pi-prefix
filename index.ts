@@ -33,6 +33,13 @@ const DELIVER_WHILE_BUSY = "steer";
 // WHY: the only way to approve a project overlay; an explicit, reviewed user
 // action replaces the old implicit trust of any project file.
 const ALLOW_PROJECT_SUBCOMMAND = "allow-project";
+// WHY: Pi's confirm lists Yes first, so a stray Enter or type-ahead would
+// approve; a select with No first makes the safe answer the default.
+const APPROVE_DECLINE_OPTION = "No";
+const APPROVE_ACCEPT_OPTION = "Yes, approve";
+// WHY: only a person at the terminal may consent; RPC clients could answer
+// the dialog automatically, and print modes have no one to ask.
+const INTERACTIVE_MODE = "tui";
 const PROJECT_IDLE_STATUS = `prefix ${PROJECT_STATUS_MARKER}`;
 const JSON_INDENT = 2;
 // WHY: write-then-rename keeps the user's global config whole if Pi exits
@@ -122,6 +129,10 @@ function statusMessage(
  * user reviewed; the overlay is re-read once so what is shown is what is pinned.
  */
 async function allowProject(ctx: ExtensionContext, globalPath: string, projectPath: string): Promise<void> {
+  if (!ctx.hasUI || ctx.mode !== INTERACTIVE_MODE) {
+    ctx.ui.notify("pi-prefix: project overlays can only be approved in the interactive terminal UI", "error");
+    return;
+  }
   if (!ctx.isProjectTrusted()) {
     ctx.ui.notify("pi-prefix: trust this project in Pi before approving its overlay", "error");
     return;
@@ -150,11 +161,11 @@ async function allowProject(ctx: ExtensionContext, globalPath: string, projectPa
     return;
   }
   const approval: ProjectOverlayApproval = { path: canonicalProjectPath(ctx.cwd), sha256: hashOverlay(raw) };
-  const confirmed = await ctx.ui.confirm(
-    "Approve pi-prefix project overlay?",
-    [`project: ${approval.path}`, `sha256: ${approval.sha256}`, "", raw].join("\n"),
+  const choice = await ctx.ui.select(
+    ["Approve pi-prefix project overlay?", `project: ${approval.path}`, `sha256: ${approval.sha256}`, "", raw].join("\n"),
+    [APPROVE_DECLINE_OPTION, APPROVE_ACCEPT_OPTION],
   );
-  if (!confirmed) {
+  if (choice !== APPROVE_ACCEPT_OPTION) {
     ctx.ui.notify("pi-prefix: project overlay not approved", "info");
     return;
   }
