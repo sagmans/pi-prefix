@@ -46,6 +46,9 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       # The candidate host must not rewrite the oldest-supported lockfile.
-      - run: npm install --no-save --package-lock=false --ignore-scripts @earendil-works/pi-coding-agent@"$PI_VERSION" @earendil-works/pi-tui@"$PI_VERSION"
+      # WHY pi-codemode: the host declares it with a caret range, so a newer
+      # sibling release can break the pinned host at import time; pinning it
+      # to the host version tests the host as it was released.
+      - run: npm install --no-save --package-lock=false --ignore-scripts @earendil-works/pi-coding-agent@"$PI_VERSION" @earendil-works/pi-tui@"$PI_VERSION" @earendil-works/pi-codemode@"$PI_VERSION"
       - run: npm run typecheck
       - run: npm test
