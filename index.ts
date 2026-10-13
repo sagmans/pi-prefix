@@ -5,7 +5,8 @@ import type {
   KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { EditorComponent, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { closeSync, fchmodSync, fsyncSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   canonicalProjectPath,
@@ -40,12 +41,24 @@ const APPROVE_ACCEPT_OPTION = "Yes, approve";
 // WHY: only a person at the terminal may consent; RPC clients could answer
 // the dialog automatically, and print modes have no one to ask.
 const INTERACTIVE_MODE = "tui";
+// WHY: JSON escaping leaves format (bidi, zero-width), C1 and line-separator
+// characters raw; those are escaped too so nothing in the dialog is hidden.
+const HIDDEN_TEXT_PATTERN = /[\p{Cf}\u0080-\u009f\u2028\u2029]/gu;
+const UNREGISTERED_COMMAND_NOTE = "not a registered extension command; will be refused";
 const PROJECT_IDLE_STATUS = `prefix ${PROJECT_STATUS_MARKER}`;
 const JSON_INDENT = 2;
 const TEXT_ENCODING = "utf8";
 // WHY: write-then-rename keeps the user's global config whole if Pi exits
-// mid-write.
+// mid-write; a random name opened exclusively cannot be pre-created or
+// symlinked by someone else.
 const TEMP_SUFFIX = ".tmp";
+const TEMP_RANDOM_BYTES = 8;
+const TEMP_RANDOM_ENCODING = "hex";
+const EXCLUSIVE_CREATE_FLAG = "wx";
+// WHY: the global config is the trust anchor; a new file is private, and an
+// existing file keeps the permissions its owner chose.
+const NEW_CONFIG_MODE = 0o600;
+const PERMISSION_BITS = 0o777;
 
 type SessionState = {
   result: LoadConfigResult;
@@ -125,11 +138,81 @@ function statusMessage(
 }
 
 /**
+ * Replace the global config atomically. WHY: approvals live in this file, so
+ * a crash must not truncate it and a rewrite must not widen its permissions.
+ */
+function writeGlobalConfig(globalPath: string, text: string): void {
+  let mode = NEW_CONFIG_MODE;
+  try {
+    mode = statSync(globalPath).mode & PERMISSION_BITS;
+  } catch {
+    // WHY: a missing file is the first approval; keep the private default.
+  }
+  const tempPath = `${globalPath}.${randomBytes(TEMP_RANDOM_BYTES).toString(TEMP_RANDOM_ENCODING)}${TEMP_SUFFIX}`;
+  const fd = openSync(tempPath, EXCLUSIVE_CREATE_FLAG, mode);
+  try {
+    writeSync(fd, text);
+    // WHY: the create mode is reduced by the umask; set it explicitly.
+    fchmodSync(fd, mode);
+    fsyncSync(fd);
+  } catch (error) {
+    closeSync(fd);
+    unlinkSync(tempPath);
+    throw error;
+  }
+  closeSync(fd);
+  try {
+    renameSync(tempPath, globalPath);
+  } catch (error) {
+    unlinkSync(tempPath);
+    throw error;
+  }
+}
+
+// WHY: injected so the dialog can name each command's owning extension
+// without this module depending on the host command registry.
+type CommandLookup = (name: string) => { description?: string; path?: string } | undefined;
+
+/**
+ * Render a value for the approval dialog. WHY: JSON string escaping turns
+ * control, bidi and zero-width characters into visible escapes, so text from
+ * a repository cannot disguise itself in the one place consent is given.
+ */
+function visible(value: string): string {
+  return JSON.stringify(value)
+    .slice(1, -1)
+    .replace(HIDDEN_TEXT_PATTERN, (char) => `\\u${(char.codePointAt(0) ?? 0).toString(16).padStart(4, "0")}`);
+}
+
+/**
+ * One line per binding with the command's owning extension. WHY: users judge
+ * what a key will do, not raw JSON; showing the resolved owner reveals keys
+ * that point at an unexpected extension.
+ */
+function describeOverlay(bindings: ReadonlyMap<string, unknown>, lookup: CommandLookup): string[] {
+  const lines: string[] = [];
+  for (const [key, target] of bindings) {
+    if (target === null || typeof target !== "object" || !("command" in target)) continue;
+    const command = String((target as { command: string }).command);
+    const info = lookup(commandName(command));
+    const parts = [info?.path, info?.description].filter((part): part is string => part !== undefined && part !== "");
+    const detail = info === undefined ? UNREGISTERED_COMMAND_NOTE : parts.map(visible).join(" - ");
+    lines.push(`${visible(key)} -> ${visible(command)}${detail.length > 0 ? `  (${detail})` : ""}`);
+  }
+  return lines;
+}
+
+/**
  * Record approval of the current project's overlay in the global config.
  * WHY: consent must be a deliberate user step that pins the exact bytes the
  * user reviewed; the overlay is re-read once so what is shown is what is pinned.
  */
-async function allowProject(ctx: ExtensionContext, globalPath: string, projectPath: string): Promise<void> {
+async function allowProject(
+  ctx: ExtensionContext,
+  globalPath: string,
+  projectPath: string,
+  lookup: CommandLookup,
+): Promise<void> {
   if (!ctx.hasUI || ctx.mode !== INTERACTIVE_MODE) {
     ctx.ui.notify("pi-prefix: project overlays can only be approved in the interactive terminal UI", "error");
     return;
@@ -164,7 +247,13 @@ async function allowProject(ctx: ExtensionContext, globalPath: string, projectPa
   }
   const approval: ProjectOverlayApproval = { path: canonicalProjectPath(ctx.cwd), sha256: hashOverlay(bytes) };
   const choice = await ctx.ui.select(
-    ["Approve pi-prefix project overlay?", `project: ${approval.path}`, `sha256: ${approval.sha256}`, "", raw].join("\n"),
+    [
+      "Approve pi-prefix project overlay?",
+      `project: ${visible(approval.path)}`,
+      `sha256: ${approval.sha256}`,
+      "",
+      ...describeOverlay(parsed.layer.bindings ?? new Map(), lookup),
+    ].join("\n"),
     [APPROVE_DECLINE_OPTION, APPROVE_ACCEPT_OPTION],
   );
   if (choice !== APPROVE_ACCEPT_OPTION) {
@@ -174,9 +263,12 @@ async function allowProject(ctx: ExtensionContext, globalPath: string, projectPa
   const overlays = (globalConfig.projectOverlays as { allow?: ProjectOverlayApproval[] } | undefined) ?? {};
   const allow = (overlays.allow ?? []).filter((entry) => entry.path !== approval.path);
   globalConfig.projectOverlays = { ...overlays, allow: [...allow, approval] };
-  const tempPath = `${globalPath}${TEMP_SUFFIX}`;
-  writeFileSync(tempPath, `${JSON.stringify(globalConfig, null, JSON_INDENT)}\n`);
-  renameSync(tempPath, globalPath);
+  try {
+    writeGlobalConfig(globalPath, `${JSON.stringify(globalConfig, null, JSON_INDENT)}\n`);
+  } catch (error) {
+    ctx.ui.notify(`pi-prefix: cannot update ${globalPath}: ${(error as Error).message}`, "error");
+    return;
+  }
   ctx.ui.notify(`pi-prefix: project overlay approved for ${approval.path}; run /reload to apply`, "info");
 }
 
@@ -194,7 +286,14 @@ export function setupPiPrefix(
     handler: async (args: string, ctx: ExtensionContext) => {
       if (args.trim() === ALLOW_PROJECT_SUBCOMMAND) {
         const paths = loadConfig({ agentDir: options.agentDir, cwd: ctx.cwd, projectTrusted: false });
-        await allowProject(ctx, paths.globalPath, paths.projectPath);
+        await allowProject(ctx, paths.globalPath, paths.projectPath, (name) => {
+          const command = pi.getCommands().find(
+            (available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE,
+          );
+          return command === undefined
+            ? undefined
+            : { description: command.description, path: command.sourceInfo?.path };
+        });
         return;
       }
       ctx.ui.notify(statusMessage(state, options.agentDir, inactiveResult), "info");
