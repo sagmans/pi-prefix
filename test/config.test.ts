@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig, normalizeKeyId } from "../src/config.ts";
+import { hashOverlay, loadConfig, normalizeKeyId } from "../src/config.ts";
 
 type Env = {
   agentDir: string;
@@ -74,43 +74,72 @@ test("global timeout override applies", () => {
   assert.equal(result.config?.timeoutMs, 5000);
 });
 
-test("trusted project overlay adds, replaces, and removes bindings", () => {
-  const env = makeEnv();
-  writeGlobal(env, GLOBAL_CONFIG);
-  writeProject(env, {
-    bindings: {
-      o: null,
-      h: { command: "/model", submit: false },
-      w: { command: "/project-command", submit: true },
-    },
+function approve(env: Env, extra: Record<string, unknown> = GLOBAL_CONFIG): void {
+  const raw = readFileSync(join(env.projectDir, ".pi", "pi-prefix.json"), "utf8");
+  writeGlobal(env, {
+    ...extra,
+    projectOverlays: { allow: [{ path: realpathSync(env.projectDir), sha256: hashOverlay(raw) }] },
   });
+}
+
+const PROJECT_OVERLAY = { bindings: { w: { command: "/project-command", submit: true } } };
+
+test("approved trusted project overlay adds command bindings", () => {
+  const env = makeEnv();
+  writeProject(env, PROJECT_OVERLAY);
+  approve(env);
   const result = env.load(true);
-  assert.equal(result.projectLoaded, true);
-  const { config } = result;
-  assert.ok(config);
-  assert.equal(config.bindings.size, 3);
-  assert.equal(config.bindings.has("o"), false);
-  assert.deepEqual(config.bindings.get("h"), { command: "/model", submit: false });
-  assert.deepEqual(config.bindings.get("w"), { command: "/project-command", submit: true });
-  assert.deepEqual(config.bindings.get("m"), { action: "app.model.select" });
+  assert.equal(result.projectState, "loaded");
+  assert.equal(result.config?.bindings.size, 4);
+  assert.deepEqual([...(result.config?.projectKeys ?? [])], ["w"]);
 });
 
-test("project scalar prefix replaces global prefix", () => {
+test("trusted but unapproved project overlay is ignored", () => {
   const env = makeEnv();
   writeGlobal(env, GLOBAL_CONFIG);
-  writeProject(env, { prefix: "ctrl+alt+p" });
+  writeProject(env, PROJECT_OVERLAY);
   const result = env.load(true);
-  assert.equal(result.config?.prefix, "ctrl+alt+p");
-});
-
-test("untrusted project config is ignored", () => {
-  const env = makeEnv();
-  writeGlobal(env, GLOBAL_CONFIG);
-  writeProject(env, { prefix: "ctrl+alt+p", bindings: { z: { action: "app.zap" } } });
-  const result = env.load(false);
-  assert.equal(result.projectLoaded, false);
-  assert.equal(result.config?.prefix, "ctrl+x");
+  assert.equal(result.projectState, "not-allowed");
   assert.equal(result.config?.bindings.size, 3);
+  assert.equal(result.config?.projectKeys.size, 0);
+});
+
+test("changed project overlay is ignored until re-approved", () => {
+  const env = makeEnv();
+  writeProject(env, PROJECT_OVERLAY);
+  approve(env);
+  writeProject(env, { bindings: { w: { command: "/other", submit: true } } });
+  const result = env.load(true);
+  assert.equal(result.projectState, "changed");
+  assert.equal(result.config?.projectKeys.size, 0);
+});
+
+test("untrusted project config is ignored even when approved", () => {
+  const env = makeEnv();
+  writeProject(env, PROJECT_OVERLAY);
+  approve(env);
+  const result = env.load(false);
+  assert.equal(result.projectState, "untrusted");
+  assert.equal(result.config?.bindings.size, 3);
+});
+
+test("project overlay cannot change scalars, user bindings, or use blocked commands", () => {
+  for (const overlay of [
+    { prefix: "ctrl+alt+p" },
+    { timeoutMs: 1 },
+    { bindings: { o: null } },
+    { bindings: { h: { command: "/project-command", submit: true } } },
+    { bindings: { z: { action: "app.exit" } } },
+    { bindings: { z: { command: "/share", submit: true } } },
+  ]) {
+    const env = makeEnv();
+    writeProject(env, overlay);
+    approve(env);
+    const result = env.load(true);
+    assert.equal(result.projectState, "rejected", JSON.stringify(overlay));
+    assert.equal(result.config?.prefix, "ctrl+x");
+    assert.equal(result.config?.bindings.size, 3);
+  }
 });
 
 test("malformed JSON fails closed with path and reason", () => {
@@ -222,15 +251,6 @@ test("escape binding warns but stays active", () => {
   assert.ok(result.config);
   assert.equal(result.config.bindings.size, 2);
   assert.ok(result.diagnostics.some((d) => d.level === "warning" && d.message.includes("escape")));
-});
-
-test("bindings emptied by overlay stays inert", () => {
-  const env = makeEnv();
-  writeGlobal(env, { prefix: "ctrl+x", bindings: { m: { action: "app.model.select" } } });
-  writeProject(env, { bindings: { m: null } });
-  const result = env.load(true);
-  assert.equal(result.config, undefined);
-  assert.deepEqual(result.diagnostics, []);
 });
 
 test("normalizeKeyId maps aliases and modifier order", () => {

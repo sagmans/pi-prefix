@@ -5,11 +5,19 @@ import type {
   KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { EditorComponent, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
-import { loadConfig } from "./src/config.ts";
-import type { LoadConfigResult } from "./src/config.ts";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import {
+  canonicalProjectPath,
+  commandName,
+  hashOverlay,
+  loadConfig,
+  parseProjectOverlay,
+} from "./src/config.ts";
+import type { LoadConfigResult, ProjectOverlayApproval } from "./src/config.ts";
 import { findPrefixConflicts } from "./src/conflicts.ts";
 import type { PrefixConflict } from "./src/conflicts.ts";
-import { PrefixEditor } from "./src/prefix-editor.ts";
+import { PrefixEditor, PROJECT_STATUS_MARKER } from "./src/prefix-editor.ts";
 
 const STATUS_KEY = "pi-prefix";
 const STATUS_COMMAND = "pi-prefix";
@@ -21,9 +29,15 @@ const THIRD_PARTY_LIMIT_NOTE =
 // WHY: only extension-owned commands can execute through sendUserMessage;
 // built-in interactive commands and templates need the editor-submit path.
 const EXTENSION_COMMAND_SOURCE = "extension";
-const COMMAND_NAME_SEPARATOR = " ";
-const COMMAND_PREFIX = "/";
 const DELIVER_WHILE_BUSY = "steer";
+// WHY: the only way to approve a project overlay; an explicit, reviewed user
+// action replaces the old implicit trust of any project file.
+const ALLOW_PROJECT_SUBCOMMAND = "allow-project";
+const PROJECT_IDLE_STATUS = `prefix ${PROJECT_STATUS_MARKER}`;
+const JSON_INDENT = 2;
+// WHY: write-then-rename keeps the user's global config whole if Pi exits
+// mid-write.
+const TEMP_SUFFIX = ".tmp";
 
 type SessionState = {
   result: LoadConfigResult;
@@ -39,12 +53,6 @@ function formatDiagnostics(result: LoadConfigResult, level: "error" | "warning")
     .map((diagnostic) => `${diagnostic.path}: ${diagnostic.message}`);
 }
 
-function extensionCommandName(command: string): string {
-  const withoutPrefix = command.startsWith(COMMAND_PREFIX) ? command.slice(COMMAND_PREFIX.length) : command;
-  const separatorIndex = withoutPrefix.indexOf(COMMAND_NAME_SEPARATOR);
-  return separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, separatorIndex);
-}
-
 function bindingSummary(state: SessionState): string {
   const bindings = state.result.config?.bindings;
   if (bindings === undefined) return "none";
@@ -56,7 +64,8 @@ function bindingSummary(state: SessionState): string {
           : "command" in target
             ? `command ${target.command}${target.submit ? " (submit)" : ""}`
             : `event ${target.event}`;
-      return `${key} -> ${description}`;
+      const origin = state.result.config?.projectKeys.has(key) ? ` ${PROJECT_STATUS_MARKER}` : "";
+      return `${key} -> ${description}${origin}`;
     })
     .join(", ");
 }
@@ -92,7 +101,7 @@ function statusMessage(
     `bindings: ${bindingSummary(state)}`,
     `project trusted: ${state.projectTrusted ? "yes" : "no"}`,
     `global: ${state.result.globalPath}`,
-    `project: ${state.result.projectPath}${state.result.projectLoaded ? " (loaded)" : ""}`,
+    `project: ${state.result.projectPath} (${state.result.projectState})`,
   ];
   for (const error of formatDiagnostics(state.result, "error")) {
     lines.push(`error: ${error}`);
@@ -107,6 +116,57 @@ function statusMessage(
   return lines.join(" | ");
 }
 
+/**
+ * Record approval of the current project's overlay in the global config.
+ * WHY: consent must be a deliberate user step that pins the exact bytes the
+ * user reviewed; the overlay is re-read once so what is shown is what is pinned.
+ */
+async function allowProject(ctx: ExtensionContext, globalPath: string, projectPath: string): Promise<void> {
+  if (!ctx.isProjectTrusted()) {
+    ctx.ui.notify("pi-prefix: trust this project in Pi before approving its overlay", "error");
+    return;
+  }
+  let raw: string;
+  try {
+    raw = readFileSync(projectPath, "utf8");
+  } catch {
+    ctx.ui.notify(`pi-prefix: no project overlay at ${projectPath}`, "error");
+    return;
+  }
+  let globalConfig: Record<string, unknown> = {};
+  try {
+    globalConfig = JSON.parse(readFileSync(globalPath, "utf8")) as Record<string, unknown>;
+  } catch (error) {
+    // WHY: never overwrite a global config we could not parse.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      ctx.ui.notify(`pi-prefix: cannot update ${globalPath}: ${(error as Error).message}`, "error");
+      return;
+    }
+  }
+  const userResult = loadConfig({ agentDir: dirname(globalPath), cwd: ctx.cwd, projectTrusted: false });
+  const parsed = parseProjectOverlay(raw, projectPath, userResult.config?.bindings);
+  if (parsed.layer === undefined) {
+    ctx.ui.notify(`pi-prefix: overlay not approvable: ${parsed.problems.join("; ")}`, "error");
+    return;
+  }
+  const approval: ProjectOverlayApproval = { path: canonicalProjectPath(ctx.cwd), sha256: hashOverlay(raw) };
+  const confirmed = await ctx.ui.confirm(
+    "Approve pi-prefix project overlay?",
+    [`project: ${approval.path}`, `sha256: ${approval.sha256}`, "", raw].join("\n"),
+  );
+  if (!confirmed) {
+    ctx.ui.notify("pi-prefix: project overlay not approved", "info");
+    return;
+  }
+  const overlays = (globalConfig.projectOverlays as { allow?: ProjectOverlayApproval[] } | undefined) ?? {};
+  const allow = (overlays.allow ?? []).filter((entry) => entry.path !== approval.path);
+  globalConfig.projectOverlays = { ...overlays, allow: [...allow, approval] };
+  const tempPath = `${globalPath}${TEMP_SUFFIX}`;
+  writeFileSync(tempPath, `${JSON.stringify(globalConfig, null, JSON_INDENT)}\n`);
+  renameSync(tempPath, globalPath);
+  ctx.ui.notify(`pi-prefix: project overlay approved for ${approval.path}; run /reload to apply`, "info");
+}
+
 export function setupPiPrefix(
   pi: ExtensionAPI,
   options: { agentDir: string },
@@ -117,8 +177,13 @@ export function setupPiPrefix(
   let inactiveResult: LoadConfigResult | undefined;
 
   pi.registerCommand(STATUS_COMMAND, {
-    description: "Show pi-prefix status, loaded config layers, and conflicts",
-    handler: async (_args: string, ctx: ExtensionContext) => {
+    description: `Show pi-prefix status; "${ALLOW_PROJECT_SUBCOMMAND}" approves this project's overlay`,
+    handler: async (args: string, ctx: ExtensionContext) => {
+      if (args.trim() === ALLOW_PROJECT_SUBCOMMAND) {
+        const paths = loadConfig({ agentDir: options.agentDir, cwd: ctx.cwd, projectTrusted: false });
+        await allowProject(ctx, paths.globalPath, paths.projectPath);
+        return;
+      }
       ctx.ui.notify(statusMessage(state, options.agentDir, inactiveResult), "info");
     },
   });
@@ -143,6 +208,13 @@ export function setupPiPrefix(
       return;
     }
     inactiveResult = undefined;
+    const overlayActive = result.config.projectKeys.size > 0;
+    if (overlayActive) {
+      // WHY: repository-defined keys must be visible when they go live.
+      const keys = [...result.config.projectKeys].join(", ");
+      ctx.ui.notify(`pi-prefix: project overlay active (${result.projectPath}): ${keys}`, "info");
+      ctx.ui.setStatus(STATUS_KEY, PROJECT_IDLE_STATUS);
+    }
     state = {
       result,
       projectTrusted: ctx.isProjectTrusted(),
@@ -151,6 +223,12 @@ export function setupPiPrefix(
       shortcutRegistered: false,
     };
     const sessionState: SessionState = state;
+    const isExtensionCommand = (command: string): boolean => {
+      const name = commandName(command);
+      return pi.getCommands().some(
+        (available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE,
+      );
+    };
     const previousFactory = ctx.ui.getEditorComponent();
     ctx.ui.setEditorComponent(
       (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
@@ -166,12 +244,10 @@ export function setupPiPrefix(
           emitEvent: (event, payload) => pi.events.emit(event, payload),
           setStatus: (text) => ctx.ui.setStatus(STATUS_KEY, text),
           notify: (message, type) => ctx.ui.notify(message, type),
+          isExtensionCommand,
+          idleStatus: overlayActive ? PROJECT_IDLE_STATUS : undefined,
           dispatchExtensionCommand: (command) => {
-            const name = extensionCommandName(command);
-            const isExtensionCommand = pi.getCommands().some(
-              (available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE,
-            );
-            if (!isExtensionCommand) return false;
+            if (!isExtensionCommand(command)) return false;
             // WHY: newer Pi hosts treat a starting run as busy and reject
             // sendUserMessage without deliverAs; steer matches what Enter does
             // for typed input while the agent is working.

@@ -19,7 +19,7 @@ function makeConfig(overrides: Record<string, PrefixTarget> = {}): EffectivePref
   const bindings = new Map<KeyId, PrefixTarget>(
     Object.entries(targets) as [KeyId, PrefixTarget][],
   );
-  return { prefix: "ctrl+x", timeoutMs: 2000, bindings };
+  return { prefix: "ctrl+x", timeoutMs: 2000, bindings, projectKeys: new Set<KeyId>() };
 }
 
 type InnerCalls = {
@@ -90,6 +90,7 @@ function makeEditor(
       dispatches.push(command);
       return dispatchExtensionCommandHandler(command);
     },
+    isExtensionCommand: () => false,
   });
   return { editor, inner, calls, statuses, notifications, events, dispatches };
 }

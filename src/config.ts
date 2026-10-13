@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import { readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // WHY: rebranded Pi distributions may rename the project config directory;
 // the exported constant is the only rebrand-safe source.
@@ -11,17 +12,28 @@ export type PrefixTarget =
   | { command: string; submit: boolean }
   | { event: string; payload?: unknown };
 
+export type ProjectOverlayApproval = {
+  path: string;
+  sha256: string;
+};
+
 export type PrefixConfigLayer = {
   $schema?: string;
   prefix?: string;
   timeoutMs?: number;
   bindings?: Record<string, PrefixTarget | null>;
+  // WHY: consent for project overlays must live in a file the project cannot
+  // write, so this key is accepted only in the global layer.
+  projectOverlays?: { allow: ProjectOverlayApproval[] };
 };
 
 export type EffectivePrefixConfig = {
   prefix: KeyId;
   timeoutMs: number;
   bindings: ReadonlyMap<KeyId, PrefixTarget>;
+  // WHY: dispatch applies stricter rules to keys that came from a project
+  // overlay, so their origin must survive the merge.
+  projectKeys: ReadonlySet<KeyId>;
 };
 
 export type ConfigDiagnostic = {
@@ -36,12 +48,25 @@ export type LoadConfigOptions = {
   projectTrusted: boolean;
 };
 
+/**
+ * Why the project overlay was or was not applied; drives the load-time notice
+ * and the status command so users can see which opt-in step is missing.
+ */
+export type ProjectOverlayState =
+  | "absent"
+  | "untrusted"
+  | "not-allowed"
+  | "changed"
+  | "rejected"
+  | "loaded";
+
 export type LoadConfigResult = {
   config?: EffectivePrefixConfig;
   diagnostics: ConfigDiagnostic[];
   globalPath: string;
   projectPath: string;
   projectLoaded: boolean;
+  projectState: ProjectOverlayState;
 };
 
 // WHY: pi-tui defines modifier order as ctrl, shift, alt, super; canonical
@@ -81,7 +106,29 @@ const SYMBOL_KEYS = new Set(
   "`-=[]\\;',./!@#$%^&*()_+|~{}:<>?".split(""),
 );
 
-const LAYER_TOP_LEVEL_KEYS = new Set(["$schema", "prefix", "timeoutMs", "bindings"]);
+const LAYER_TOP_LEVEL_KEYS = new Set(["$schema", "prefix", "timeoutMs", "bindings", "projectOverlays"]);
+const PROJECT_OVERLAYS_KEY = "projectOverlays";
+const PROJECT_OVERLAY_ALLOW_KEY = "allow";
+const APPROVAL_KEYS = new Set(["path", "sha256"]);
+// WHY: the approval pins exact overlay bytes; a lowercase hex digest is the
+// one canonical spelling so comparison is a plain string match.
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const HASH_ALGORITHM = "sha256";
+const HASH_ENCODING = "hex";
+// WHY: these built-ins upload, export, re-authenticate, change trust, or end
+// the session; a repository must never reach them through a single keypress.
+export const PROJECT_BLOCKED_COMMANDS: ReadonlySet<string> = new Set([
+  "share",
+  "export",
+  "login",
+  "trust",
+  "quit",
+]);
+// WHY: a project overlay may only add keys and only bind slash commands; the
+// host later checks that the command is a registered extension command.
+const PROJECT_FORBIDDEN_SCALARS = ["prefix", "timeoutMs"] as const;
+const COMMAND_PREFIX = "/";
+const COMMAND_NAME_SEPARATOR = " ";
 const TARGET_KEYS = ["action", "command", "event"] as const;
 // WHY: submit belongs to command targets and payload to event targets; both
 // must pass the unknown-property guard before kind-specific validation.
@@ -229,7 +276,57 @@ type ParsedLayer = {
   prefix?: KeyId;
   timeoutMs?: number;
   bindings?: Map<KeyId, PrefixTarget | null>;
+  approvals?: ProjectOverlayApproval[];
 };
+
+/** Extract the command name so policy checks ignore any arguments. */
+export function commandName(command: string): string {
+  const withoutPrefix = command.startsWith(COMMAND_PREFIX) ? command.slice(COMMAND_PREFIX.length) : command;
+  const separatorIndex = withoutPrefix.indexOf(COMMAND_NAME_SEPARATOR);
+  return separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, separatorIndex);
+}
+
+/** Hash overlay bytes exactly as read, so any edit invalidates an approval. */
+export function hashOverlay(raw: string): string {
+  return createHash(HASH_ALGORITHM).update(raw).digest(HASH_ENCODING);
+}
+
+function parseApprovals(
+  value: unknown,
+  path: string,
+  diagnostics: ConfigDiagnostic[],
+): ProjectOverlayApproval[] | undefined {
+  const record = value as Record<string, unknown> | null;
+  if (
+    typeof value !== "object" || record === null || Array.isArray(value) ||
+    Object.keys(record).some((key) => key !== PROJECT_OVERLAY_ALLOW_KEY) ||
+    !Array.isArray(record[PROJECT_OVERLAY_ALLOW_KEY])
+  ) {
+    diagnostics.push({ level: "error", path, message: `${PROJECT_OVERLAYS_KEY} must be { "allow": [...] }` });
+    return undefined;
+  }
+  const approvals: ProjectOverlayApproval[] = [];
+  for (const entry of record[PROJECT_OVERLAY_ALLOW_KEY] as unknown[]) {
+    const item = entry as Record<string, unknown> | null;
+    // WHY: relative paths or globs would let one approval cover directories
+    // the user never inspected.
+    if (
+      typeof entry !== "object" || item === null || Array.isArray(entry) ||
+      Object.keys(item).some((key) => !APPROVAL_KEYS.has(key)) ||
+      typeof item.path !== "string" || !isAbsolute(item.path) ||
+      typeof item.sha256 !== "string" || !SHA256_PATTERN.test(item.sha256)
+    ) {
+      diagnostics.push({
+        level: "error",
+        path,
+        message: `${PROJECT_OVERLAYS_KEY}.allow entries need an absolute "path" and a lowercase hex "sha256"`,
+      });
+      return undefined;
+    }
+    approvals.push({ path: item.path, sha256: item.sha256 });
+  }
+  return approvals;
+}
 
 function parseLayer(
   raw: string,
@@ -256,6 +353,15 @@ function parseLayer(
     }
   }
   const layer: ParsedLayer = {};
+  if (record[PROJECT_OVERLAYS_KEY] !== undefined) {
+    if (isDefaults) {
+      diagnostics.push({ level: "error", path, message: `defaults must not ship ${PROJECT_OVERLAYS_KEY}` });
+      return undefined;
+    }
+    const approvals = parseApprovals(record[PROJECT_OVERLAYS_KEY], path, diagnostics);
+    if (approvals === undefined) return undefined;
+    layer.approvals = approvals;
+  }
   if (record.prefix !== undefined) {
     const normalized = normalizeKeyId(record.prefix as string);
     if (normalized === undefined) {
@@ -312,19 +418,69 @@ function parseLayer(
   return layer;
 }
 
+function readRaw(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    // WHY: absence is ordinary; only malformed content is a diagnostic.
+    return undefined;
+  }
+}
+
 function readLayer(
   path: string,
   isDefaults: boolean,
   diagnostics: ConfigDiagnostic[],
 ): ParsedLayer | undefined {
-  let raw: string;
+  const raw = readRaw(path);
+  return raw === undefined ? undefined : parseLayer(raw, path, isDefaults, diagnostics);
+}
+
+/**
+ * Canonical project identity for approvals. WHY: symlinked or relative
+ * spellings of one directory must map to a single allowlist entry.
+ */
+export function canonicalProjectPath(cwd: string): string {
   try {
-    raw = readFileSync(path, "utf8");
+    return realpathSync(cwd);
   } catch {
-    // WHY: absence is ordinary; only malformed content is a diagnostic.
-    return undefined;
+    return cwd;
   }
-  return parseLayer(raw, path, isDefaults, diagnostics);
+}
+
+/**
+ * Parse an overlay and enforce the project-layer limits. WHY: a repository is
+ * less trusted than the user, so it may only add command bindings; changing
+ * the prefix, timeout, or the user's own bindings stays a user decision.
+ * Problems are returned, never thrown, so callers can report every reason.
+ */
+export function parseProjectOverlay(
+  raw: string,
+  path: string,
+  userBindings: ReadonlyMap<KeyId, PrefixTarget | null> | undefined,
+): { layer?: ParsedLayer; problems: string[] } {
+  const parseDiagnostics: ConfigDiagnostic[] = [];
+  const layer = parseLayer(raw, path, false, parseDiagnostics);
+  const problems = parseDiagnostics.filter((d) => d.level === "error").map((d) => d.message);
+  if (layer === undefined) return { problems };
+  if (layer.approvals !== undefined) {
+    problems.push(`${PROJECT_OVERLAYS_KEY} is only allowed in the global config`);
+  }
+  for (const scalar of PROJECT_FORBIDDEN_SCALARS) {
+    if (layer[scalar] !== undefined) problems.push(`"${scalar}" can only be set in the global config`);
+  }
+  for (const [key, target] of layer.bindings ?? []) {
+    if (target === null) {
+      problems.push(`binding "${key}" cannot remove a user binding`);
+    } else if (userBindings?.has(key)) {
+      problems.push(`binding "${key}" cannot replace a user binding`);
+    } else if (!("command" in target)) {
+      problems.push(`binding "${key}" must be a command`);
+    } else if (PROJECT_BLOCKED_COMMANDS.has(commandName(target.command))) {
+      problems.push(`binding "${key}" uses blocked command "${target.command}"`);
+    }
+  }
+  return problems.length > 0 ? { problems } : { layer, problems };
 }
 
 export function loadConfig(options: LoadConfigOptions): LoadConfigResult {
@@ -335,39 +491,73 @@ export function loadConfig(options: LoadConfigOptions): LoadConfigResult {
   const defaultsLayer = readLayer(DEFAULTS_PATH, true, diagnostics);
   const globalLayer = readLayer(globalPath, false, diagnostics);
   let projectLayer: ParsedLayer | undefined;
-  let projectLoaded = false;
-  if (options.projectTrusted) {
-    projectLayer = readLayer(projectPath, false, diagnostics);
-    projectLoaded = projectLayer !== undefined;
+  let projectState: ProjectOverlayState = "absent";
+  const projectRaw = readRaw(projectPath);
+  if (projectRaw !== undefined) {
+    // WHY: Pi trust alone is vacuously true for some projects, so it is a
+    // necessary gate but never consent; consent is the pinned global entry.
+    const realPath = canonicalProjectPath(options.cwd);
+    const approval = globalLayer?.approvals?.find((entry) => entry.path === realPath);
+    if (!options.projectTrusted) {
+      projectState = "untrusted";
+    } else if (approval === undefined) {
+      projectState = "not-allowed";
+      diagnostics.push({
+        level: "warning",
+        path: projectPath,
+        message: "project overlay ignored: not approved; run /pi-prefix allow-project to review and approve it",
+      });
+    } else if (approval.sha256 !== hashOverlay(projectRaw)) {
+      projectState = "changed";
+      diagnostics.push({
+        level: "warning",
+        path: projectPath,
+        message: "project overlay ignored: changed since approval; run /pi-prefix allow-project to review it again",
+      });
+    } else {
+      const parsed = parseProjectOverlay(projectRaw, projectPath, globalLayer?.bindings);
+      if (parsed.layer === undefined) {
+        projectState = "rejected";
+        // WHY: warnings, not errors, so a bad overlay can never disable the
+        // user's own working global keymap.
+        for (const problem of parsed.problems) {
+          diagnostics.push({ level: "warning", path: projectPath, message: `project overlay ignored: ${problem}` });
+        }
+      } else {
+        projectLayer = parsed.layer;
+        projectState = "loaded";
+      }
+    }
   }
 
-  const result: LoadConfigResult = { diagnostics, globalPath, projectPath, projectLoaded };
+  const result: LoadConfigResult = {
+    diagnostics,
+    globalPath,
+    projectPath,
+    projectLoaded: projectState === "loaded",
+    projectState,
+  };
   // WHY: any error in any loaded layer fails the whole effective config so a
   // partially merged map can never activate.
   if (diagnostics.some((diagnostic) => diagnostic.level === "error")) {
     return result;
   }
-  const prefix = projectLayer?.prefix ?? globalLayer?.prefix;
-  const timeoutMs =
-    projectLayer?.timeoutMs ?? globalLayer?.timeoutMs ?? defaultsLayer?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const prefix = globalLayer?.prefix;
+  const timeoutMs = globalLayer?.timeoutMs ?? defaultsLayer?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const bindings = new Map<KeyId, PrefixTarget>();
-  const overlays = [globalLayer, projectLayer];
-  for (const overlay of overlays) {
-    if (overlay?.bindings === undefined) {
-      continue;
-    }
-    for (const [key, target] of overlay.bindings) {
-      if (target === null) {
-        bindings.delete(key);
-      } else {
-        bindings.set(key, target);
-      }
-    }
+  for (const [key, target] of globalLayer?.bindings ?? []) {
+    if (target !== null) bindings.set(key, target);
+  }
+  const projectKeys = new Set<KeyId>();
+  for (const [key, target] of projectLayer?.bindings ?? []) {
+    if (target === null) continue;
+    bindings.set(key, target);
+    projectKeys.add(key);
   }
   if (prefix === undefined || bindings.size === 0) {
     // WHY: inert is the safe default; absence of a full map is not an error.
     return result;
   }
-  result.config = { prefix, timeoutMs, bindings };
+  result.config = { prefix, timeoutMs, bindings, projectKeys };
   return result;
 }
