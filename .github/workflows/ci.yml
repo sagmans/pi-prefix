@@ -53,9 +53,10 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       # The candidate host must not rewrite the oldest-supported lockfile.
-      # WHY pi-codemode: the host declares it with a caret range, so a newer
-      # sibling release can break the pinned host at import time; pinning it
-      # to the host version tests the host as it was released.
-      - run: npm install --no-save --package-lock=false --ignore-scripts @earendil-works/pi-coding-agent@"$PI_VERSION" @earendil-works/pi-tui@"$PI_VERSION" @earendil-works/pi-codemode@"$PI_VERSION"
+      # WHY every sibling: the host declares its own packages with caret
+      # ranges, so a newer sibling release can break the pinned host at import
+      # time; pinning all of them to the host version tests the host as it
+      # was released. chord is a 1.1.0 dependency; it is harmless elsewhere.
+      - run: npm install --no-save --package-lock=false --ignore-scripts @earendil-works/pi-coding-agent@"$PI_VERSION" @earendil-works/pi-tui@"$PI_VERSION" @earendil-works/pi-codemode@"$PI_VERSION" @earendil-works/pi-ai@"$PI_VERSION" @earendil-works/pi-agent-core@"$PI_VERSION" @earendil-works/pi-mcp@"$PI_VERSION" @earendil-works/chord@"$PI_VERSION"
       - run: npm run typecheck
       - run: npm test
