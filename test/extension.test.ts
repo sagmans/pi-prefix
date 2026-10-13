@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, renameSync, rmSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KeybindingsManager } from "@earendil-works/pi-tui";
@@ -450,4 +450,87 @@ test("active project overlay notice names each key's command", () => {
   assert.ok(notice);
   assert.ok(notice.message.includes("w -> /plan"));
   assert.equal(notice.type, "warning");
+});
+
+test("approval refuses device, FIFO and oversized overlays without hanging", async () => {
+  for (const target of ["/dev/zero", "/dev/stdin"]) {
+    const env = makeApproveEnv();
+    const overlayPath = join(env.projectDir, ".pi", "pi-prefix.json");
+    rmSync(overlayPath);
+    symlinkSync(target, overlayPath);
+    const { ctx, dialogs, notifications } = makeApproveContext(env.projectDir, "Yes, approve");
+    await env.handler("allow-project", ctx);
+    assert.equal(dialogs.length, 0, target);
+    assert.ok(notifications.some((n) => n.type === "error" && n.message.includes("not approvable")), target);
+    assert.equal(readFileSync(env.globalPath, "utf8"), env.before);
+  }
+});
+
+test("approval refuses a key the user removed with null", async () => {
+  const env = makeApproveEnv();
+  writeAgentConfig(env.agentDir, { prefix: "ctrl+x", bindings: { w: null } });
+  const before = readFileSync(env.globalPath, "utf8");
+  const { ctx, dialogs } = makeApproveContext(env.projectDir, "Yes, approve");
+  await env.handler("allow-project", ctx);
+  assert.equal(dialogs.length, 0);
+  assert.equal(readFileSync(env.globalPath, "utf8"), before);
+});
+
+test("approval refuses global configs it cannot safely update", async () => {
+  for (const text of [
+    "[]",
+    '{"projectOverlays": []}',
+    '{"projectOverlays": {"allow": {}}}',
+    '{"prefix": "ctrl+x", "timeoutMs": 0}',
+  ]) {
+    const env = makeApproveEnv();
+    writeFileSync(env.globalPath, text);
+    const { ctx, dialogs } = makeApproveContext(env.projectDir, "Yes, approve");
+    await env.handler("allow-project", ctx);
+    assert.equal(dialogs.length, 0, text);
+    assert.equal(readFileSync(env.globalPath, "utf8"), text);
+  }
+});
+
+test("approval aborts when either file changes during review", async () => {
+  for (const change of ["overlay", "global"]) {
+    const env = makeApproveEnv();
+    const overlayPath = join(env.projectDir, ".pi", "pi-prefix.json");
+    const { ctx } = makeApproveContext(env.projectDir, "Yes, approve");
+    const ui = ctx.ui as { select: (t: string, o: string[]) => Promise<string> };
+    ui.select = async () => {
+      if (change === "overlay") writeFileSync(overlayPath, '{"bindings":{"w":{"command":"/other","submit":true}}}');
+      else writeFileSync(env.globalPath, '{"prefix":"ctrl+y"}');
+      return "Yes, approve";
+    };
+    await env.handler("allow-project", ctx);
+    const global = readFileSync(env.globalPath, "utf8");
+    assert.ok(!global.includes("projectOverlays"), change);
+  }
+});
+
+test("approval keeps a symlinked global config a symlink", async () => {
+  const env = makeApproveEnv();
+  const realFile = join(env.agentDir, "..", "dotfiles-pi-prefix.json");
+  renameSync(env.globalPath, realFile);
+  symlinkSync(realFile, env.globalPath);
+  const { ctx } = makeApproveContext(env.projectDir, "Yes, approve");
+  await env.handler("allow-project", ctx);
+  assert.ok(lstatSync(env.globalPath).isSymbolicLink());
+  assert.ok(readFileSync(realFile, "utf8").includes("projectOverlays"));
+});
+
+test("prefix conflict leaves no project marker in the status line", () => {
+  const env = makeApproveEnv();
+  const raw = readFileSync(join(env.projectDir, ".pi", "pi-prefix.json"));
+  writeAgentConfig(env.agentDir, {
+    prefix: "ctrl+x",
+    bindings: { h: { command: "/hotkeys", submit: true } },
+    projectOverlays: { allow: [{ path: realpathSync.native(env.projectDir), sha256: hashOverlay(raw) }] },
+  });
+  const harness = makeHarness(env.agentDir);
+  harness.startSession({ cwd: env.projectDir, trusted: true });
+  mount(harness, makeKeybindings({ "app.model.select": "ctrl+x" }));
+  assert.equal(harness.shortcuts.length, 0);
+  assert.equal(harness.statuses.at(-1)?.[1], undefined);
 });

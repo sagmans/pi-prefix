@@ -6,14 +6,16 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { EditorComponent, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
 import { randomBytes } from "node:crypto";
-import { closeSync, fchmodSync, fsyncSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
-import { dirname } from "node:path";
+import { closeSync, fchmodSync, fsyncSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import {
   canonicalProjectPath,
   commandName,
   hashOverlay,
   loadConfig,
   parseProjectOverlay,
+  readOverlayFile,
+  readUserBindings,
 } from "./src/config.ts";
 import type { LoadConfigResult, ProjectOverlayApproval } from "./src/config.ts";
 import { findPrefixConflicts } from "./src/conflicts.ts";
@@ -60,6 +62,7 @@ const EXCLUSIVE_CREATE_FLAG = "wx";
 // existing file keeps the permissions its owner chose.
 const NEW_CONFIG_MODE = 0o600;
 const PERMISSION_BITS = 0o777;
+const DIRECTORY_OPEN_FLAG = "r";
 
 type SessionState = {
   result: LoadConfigResult;
@@ -142,31 +145,40 @@ function statusMessage(
  * Replace the global config atomically. WHY: approvals live in this file, so
  * a crash must not truncate it and a rewrite must not widen its permissions.
  */
-function writeGlobalConfig(globalPath: string, text: string): void {
+function writeGlobalConfig(targetPath: string, text: string): void {
   let mode = NEW_CONFIG_MODE;
   try {
-    mode = statSync(globalPath).mode & PERMISSION_BITS;
+    mode = statSync(targetPath).mode & PERMISSION_BITS;
   } catch {
     // WHY: a missing file is the first approval; keep the private default.
   }
-  const tempPath = `${globalPath}.${randomBytes(TEMP_RANDOM_BYTES).toString(TEMP_RANDOM_ENCODING)}${TEMP_SUFFIX}`;
-  const fd = openSync(tempPath, EXCLUSIVE_CREATE_FLAG, mode);
+  const directory = dirname(targetPath);
+  const tempPath = join(
+    directory,
+    `${basename(targetPath)}.${randomBytes(TEMP_RANDOM_BYTES).toString(TEMP_RANDOM_ENCODING)}${TEMP_SUFFIX}`,
+  );
+  let renamed = false;
   try {
-    writeSync(fd, text);
-    // WHY: the create mode is reduced by the umask; set it explicitly.
-    fchmodSync(fd, mode);
-    fsyncSync(fd);
-  } catch (error) {
-    closeSync(fd);
-    unlinkSync(tempPath);
-    throw error;
-  }
-  closeSync(fd);
-  try {
-    renameSync(tempPath, globalPath);
-  } catch (error) {
-    unlinkSync(tempPath);
-    throw error;
+    const fd = openSync(tempPath, EXCLUSIVE_CREATE_FLAG, mode);
+    try {
+      writeSync(fd, text);
+      // WHY: the create mode is reduced by the umask; set it explicitly.
+      fchmodSync(fd, mode);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(tempPath, targetPath);
+    renamed = true;
+    // WHY: the rename is durable only once the directory entry is flushed.
+    const dirFd = openSync(directory, DIRECTORY_OPEN_FLAG);
+    try {
+      fsyncSync(dirFd);
+    } finally {
+      closeSync(dirFd);
+    }
+  } finally {
+    if (!renamed) rmSync(tempPath, { force: true });
   }
 }
 
@@ -190,14 +202,15 @@ function visible(value: string): string {
  * what a key will do, not raw JSON; showing the resolved owner reveals keys
  * that point at an unexpected extension.
  */
-function describeOverlay(bindings: ReadonlyMap<string, unknown>, lookup: CommandLookup): string[] {
+function formatProjectBindings(bindings: ReadonlyMap<string, unknown>, lookup?: CommandLookup): string[] {
   const lines: string[] = [];
   for (const [key, target] of bindings) {
     if (target === null || typeof target !== "object" || !("command" in target)) continue;
     const command = String((target as { command: string }).command);
-    const info = lookup(commandName(command));
+    // WHY: without a lookup (startup notice) only key and command are shown.
+    const info = lookup?.(commandName(command));
     const parts = [info?.path, info?.description].filter((part): part is string => part !== undefined && part !== "");
-    const detail = info === undefined ? UNREGISTERED_COMMAND_NOTE : parts.map(visible).join(" - ");
+    const detail = lookup === undefined ? "" : info === undefined ? UNREGISTERED_COMMAND_NOTE : parts.map(visible).join(" - ");
     lines.push(`${visible(key)} -> ${visible(command)}${detail.length > 0 ? `  (${detail})` : ""}`);
   }
   return lines;
@@ -222,26 +235,38 @@ async function allowProject(
     ctx.ui.notify("pi-prefix: trust this project in Pi before approving its overlay", "error");
     return;
   }
-  let bytes: Buffer;
-  try {
-    bytes = readFileSync(projectPath);
-  } catch {
-    ctx.ui.notify(`pi-prefix: no project overlay at ${projectPath}`, "error");
+  const read = readOverlayFile(projectPath);
+  if (read.kind !== "bytes") {
+    ctx.ui.notify(
+      read.kind === "absent"
+        ? `pi-prefix: no project overlay at ${projectPath}`
+        : `pi-prefix: project overlay not approvable: ${read.reason}`,
+      "error",
+    );
     return;
   }
-  const raw = bytes.toString(TEXT_ENCODING);
-  let globalConfig: Record<string, unknown> = {};
-  try {
-    globalConfig = JSON.parse(readFileSync(globalPath, TEXT_ENCODING)) as Record<string, unknown>;
-  } catch (error) {
-    // WHY: never overwrite a global config we could not parse.
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      ctx.ui.notify(`pi-prefix: cannot update ${globalPath}: ${(error as Error).message}`, "error");
-      return;
-    }
+  const bytes = read.bytes;
+  // WHY realpath: a dotfiles-managed config is often a symlink; writing to
+  // its target keeps the link instead of replacing it with a plain file.
+  const targetPath = resolveGlobalTarget(globalPath);
+  const before = readGlobalText(targetPath);
+  if (before.error !== undefined) {
+    ctx.ui.notify(`pi-prefix: cannot update ${globalPath}: ${before.error}`, "error");
+    return;
   }
-  const userResult = loadConfig({ agentDir: dirname(globalPath), cwd: ctx.cwd, projectTrusted: false });
-  const parsed = parseProjectOverlay(raw, projectPath, userResult.config?.bindings);
+  const globalConfig = approvableGlobalConfig(before.text);
+  if (typeof globalConfig === "string") {
+    ctx.ui.notify(`pi-prefix: cannot update ${globalPath}: ${globalConfig}`, "error");
+    return;
+  }
+  // WHY: the loader checks overlays against the user's raw global bindings,
+  // including keys removed with null; approval must use the same set.
+  const user = readUserBindings(dirname(globalPath));
+  if (user.errors.length > 0) {
+    ctx.ui.notify(`pi-prefix: fix ${globalPath} before approving: ${user.errors.join("; ")}`, "error");
+    return;
+  }
+  const parsed = parseProjectOverlay(bytes.toString(TEXT_ENCODING), projectPath, user.bindings);
   if (parsed.layer === undefined) {
     ctx.ui.notify(`pi-prefix: overlay not approvable: ${parsed.problems.join("; ")}`, "error");
     return;
@@ -253,7 +278,7 @@ async function allowProject(
       `project: ${visible(approval.path)}`,
       `sha256: ${approval.sha256}`,
       "",
-      ...describeOverlay(parsed.layer.bindings ?? new Map(), lookup),
+      ...formatProjectBindings(parsed.layer.bindings ?? new Map(), lookup),
     ].join("\n"),
     [APPROVE_DECLINE_OPTION, APPROVE_ACCEPT_OPTION],
   );
@@ -261,16 +286,76 @@ async function allowProject(
     ctx.ui.notify("pi-prefix: project overlay not approved", "info");
     return;
   }
+  // WHY: the dialog can stay open indefinitely; if either file changed in
+  // the meantime, what the user saw is no longer what would be written.
+  const overlayNow = readOverlayFile(projectPath);
+  if (overlayNow.kind !== "bytes" || hashOverlay(overlayNow.bytes) !== approval.sha256) {
+    ctx.ui.notify("pi-prefix: project overlay changed during review; run /pi-prefix allow-project again", "error");
+    return;
+  }
+  if (readGlobalText(targetPath).text !== before.text) {
+    ctx.ui.notify(`pi-prefix: ${globalPath} changed during review; run /pi-prefix allow-project again`, "error");
+    return;
+  }
   const overlays = (globalConfig.projectOverlays as { allow?: ProjectOverlayApproval[] } | undefined) ?? {};
   const allow = (overlays.allow ?? []).filter((entry) => entry.path !== approval.path);
   globalConfig.projectOverlays = { ...overlays, allow: [...allow, approval] };
   try {
-    writeGlobalConfig(globalPath, `${JSON.stringify(globalConfig, null, JSON_INDENT)}\n`);
+    writeGlobalConfig(targetPath, `${JSON.stringify(globalConfig, null, JSON_INDENT)}\n`);
   } catch (error) {
     ctx.ui.notify(`pi-prefix: cannot update ${globalPath}: ${(error as Error).message}`, "error");
     return;
   }
   ctx.ui.notify(`pi-prefix: project overlay approved for ${approval.path}; run /reload to apply`, "info");
+}
+
+/** Resolve the file a write must replace. WHY: see allowProject. */
+function resolveGlobalTarget(globalPath: string): string {
+  try {
+    return realpathSync(globalPath);
+  } catch {
+    // WHY: a missing file is the first approval; write at the given path.
+    return globalPath;
+  }
+}
+
+/** Read the global config text; a missing file reads as empty. */
+function readGlobalText(path: string): { text?: string; error?: string } {
+  try {
+    return { text: readFileSync(path, TEXT_ENCODING) };
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT"
+      ? { text: undefined }
+      : { error: (error as Error).message };
+  }
+}
+
+/**
+ * Parse the global config for an approval write, or explain why not.
+ * WHY: rewriting a file whose shape we do not understand could drop the
+ * user's settings or approvals, so only the expected shape is updated.
+ */
+function approvableGlobalConfig(text: string | undefined): Record<string, unknown> | string {
+  if (text === undefined) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return "configuration must be a JSON object";
+  }
+  const record = parsed as Record<string, unknown>;
+  const overlays = record.projectOverlays;
+  if (overlays !== undefined) {
+    if (typeof overlays !== "object" || overlays === null || Array.isArray(overlays)) {
+      return "projectOverlays must be an object";
+    }
+    const allow = (overlays as Record<string, unknown>).allow;
+    if (allow !== undefined && !Array.isArray(allow)) return "projectOverlays.allow must be an array";
+  }
+  return record;
 }
 
 export function setupPiPrefix(
@@ -325,10 +410,9 @@ export function setupPiPrefix(
     if (overlayActive) {
       // WHY: repository-defined keys must be visible when they go live, with
       // what each one runs, not just which keys exist.
-      const projectBindings = [...result.config.projectKeys].map((key) => {
-        const target = result.config?.bindings.get(key);
-        return `${key} -> ${target !== undefined && "command" in target ? target.command : "?"}`;
-      });
+      const projectBindings = formatProjectBindings(
+        new Map([...result.config.projectKeys].map((key) => [key, result.config?.bindings.get(key)])),
+      );
       // WHY warning: Pi shows info notices in one status line that the next
       // status (such as /reload's "Reloaded ...") overwrites in place, which
       // hid this notice after a reload.
