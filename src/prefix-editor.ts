@@ -242,6 +242,9 @@ export class PrefixEditor extends CustomEditor {
   dispose(): void {
     this.disposed = true;
     this.clearPrefix();
+    // WHY: a disposed wrapper (shutdown or a prefix conflict) dispatches
+    // nothing, so leaving the "[project]" marker would claim live keys.
+    this.options.setStatus(undefined);
   }
 
   render(width: number): string[] {
