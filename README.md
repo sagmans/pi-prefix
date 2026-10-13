@@ -99,6 +99,14 @@ config. Run `/reload` to apply it. If the overlay file changes later,
 pi-prefix ignores it and asks you to approve it again. To revoke, remove the
 entry from your global config.
 
+Approval rewrites the whole global config as formatted JSON (2-space
+indent). Key order can change, and the file mode is kept.
+
+pi-prefix reads an overlay file only after Pi trusts the project. An
+untrusted project's overlay is never opened. A trusted overlay must be a
+regular file (a symlink to one is fine) of at most 64 KiB; devices, FIFOs,
+directories, and larger files are refused.
+
 ```json
 {
   "projectOverlays": {
@@ -137,8 +145,9 @@ All properties are optional at layer level.
   `super`; aliases `esc`/`return` are normalized to `escape`/`enter`).
 - `timeoutMs` — positive integer; prefix mode clears after this idle time.
   Default `2000`.
-- `bindings` — map of second key id to exactly one target (`null` is accepted
-  in the global layer and has no effect there):
+- `bindings` — map of second key id to exactly one target. In the global
+  layer, `null` binds nothing and reserves the key, so a project overlay
+  cannot claim it:
   - `{ "action": "app.model.select" }` — a Pi app action. Unknown or
     context-only actions notify when pressed instead of throwing.
   - `{ "command": "/hotkeys", "submit": true }` — a slash command.

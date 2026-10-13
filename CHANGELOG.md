@@ -6,7 +6,9 @@
 - **Breaking:** project overlays can only add keys bound to registered extension commands. They can no longer set `prefix` or `timeoutMs`, replace or remove global bindings, or bind actions, events, built-in commands, or plain text. `/share`, `/export`, `/login`, `/trust`, and `/quit` are refused.
 - **Breaking:** project binding commands must be exactly `/name` (lowercase letters, digits, `:`, `_`, `-`), with no arguments and no control, bidi, or zero-width characters. `/pi-prefix` is also refused. Overlays that break these rules are rejected at load instead of at keypress.
 - The approval dialog defaults to No, lists each key with its command and owning extension instead of the raw file, and is refused outside the interactive terminal UI. Approvals pin the overlay's bytes, use the case-correct real path, and are written to the global config without widening its file mode.
-- Show a notice that lists each project key and its command, at startup and after `/reload`, and a `prefix [project]` status marker while a project overlay is active, and report the overlay state in `/pi-prefix`.
+- An untrusted project's overlay is never opened. A trusted overlay must be a regular file of at most 64 KiB; devices, FIFOs, directories, and larger files are refused.
+- A global `null` binding now reserves its key so a project overlay cannot claim it. Approval rewrites the global config as formatted JSON (2-space indent); key order can change.
+- Show a notice that lists each project key and its command, at startup and after `/reload`, and a `prefix [project]` status marker while a project overlay is active (not shown when a key conflict disables pi-prefix; hidden characters in the path are escaped), and report the overlay state in `/pi-prefix`.
 - Reject key ids that match built-in object property names such as `__proto__` or `constructor`. Before, such a binding key broke editor input after the prefix.
 - Docs only: README examples use `ctrl+\`, which is free in Pi 1.1.0, and state that insert-only bindings replace the draft. Add a live dogfooding matrix (`DOGFOOD.md`) and agent guidance (`AGENTS.md`) to run it before each release. No code change.
 
