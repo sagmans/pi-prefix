@@ -411,3 +411,12 @@ test("approval entries with bad shapes fail closed", () => {
     assert.ok(result.diagnostics.some((d) => d.level === "error"));
   }
 });
+
+test("rejection reasons show hidden characters as escapes", () => {
+  const env = makeEnv();
+  writeProject(env, { bindings: { w: { command: "/probe\u200b", submit: true } } });
+  approve(env);
+  const message = env.load(true).diagnostics.map((d) => d.message).join("\n");
+  assert.ok(message.includes("/probe\\u200b"), message);
+  assert.ok(!message.includes("\u200b"));
+});

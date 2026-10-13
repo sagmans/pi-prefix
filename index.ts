@@ -16,6 +16,7 @@ import {
   parseProjectOverlay,
   readOverlayFile,
   readUserBindings,
+  visibleText,
 } from "./src/config.ts";
 import type { LoadConfigResult, ProjectOverlayApproval } from "./src/config.ts";
 import { findPrefixConflicts } from "./src/conflicts.ts";
@@ -43,9 +44,6 @@ const APPROVE_ACCEPT_OPTION = "Yes, approve";
 // WHY: only a person at the terminal may consent; RPC clients could answer
 // the dialog automatically, and print modes have no one to ask.
 const INTERACTIVE_MODE = "tui";
-// WHY: JSON escaping leaves format (bidi, zero-width), C1 and line-separator
-// characters raw; those are escaped too so nothing in the dialog is hidden.
-const HIDDEN_TEXT_PATTERN = /[\p{Cf}\u0080-\u009f\u2028\u2029]/gu;
 const UNREGISTERED_COMMAND_NOTE = "not a registered extension command; will be refused";
 const OVERLAY_NOTICE_LEVEL = "warning";
 const PROJECT_IDLE_STATUS = `prefix ${PROJECT_STATUS_MARKER}`;
@@ -187,17 +185,6 @@ function writeGlobalConfig(targetPath: string, text: string): void {
 type CommandLookup = (name: string) => { description?: string; path?: string } | undefined;
 
 /**
- * Render a value for the approval dialog. WHY: JSON string escaping turns
- * control, bidi and zero-width characters into visible escapes, so text from
- * a repository cannot disguise itself in the one place consent is given.
- */
-function visible(value: string): string {
-  return JSON.stringify(value)
-    .slice(1, -1)
-    .replace(HIDDEN_TEXT_PATTERN, (char) => `\\u${(char.codePointAt(0) ?? 0).toString(16).padStart(4, "0")}`);
-}
-
-/**
  * One line per binding with the command's owning extension. WHY: users judge
  * what a key will do, not raw JSON; showing the resolved owner reveals keys
  * that point at an unexpected extension.
@@ -210,8 +197,8 @@ function formatProjectBindings(bindings: ReadonlyMap<string, unknown>, lookup?: 
     // WHY: without a lookup (startup notice) only key and command are shown.
     const info = lookup?.(commandName(command));
     const parts = [info?.path, info?.description].filter((part): part is string => part !== undefined && part !== "");
-    const detail = lookup === undefined ? "" : info === undefined ? UNREGISTERED_COMMAND_NOTE : parts.map(visible).join(" - ");
-    lines.push(`${visible(key)} -> ${visible(command)}${detail.length > 0 ? `  (${detail})` : ""}`);
+    const detail = lookup === undefined ? "" : info === undefined ? UNREGISTERED_COMMAND_NOTE : parts.map(visibleText).join(" - ");
+    lines.push(`${visibleText(key)} -> ${visibleText(command)}${detail.length > 0 ? `  (${detail})` : ""}`);
   }
   return lines;
 }
@@ -275,7 +262,7 @@ async function allowProject(
   const choice = await ctx.ui.select(
     [
       "Approve pi-prefix project overlay?",
-      `project: ${visible(approval.path)}`,
+      `project: ${visibleText(approval.path)}`,
       `sha256: ${approval.sha256}`,
       "",
       ...formatProjectBindings(parsed.layer.bindings ?? new Map(), lookup),

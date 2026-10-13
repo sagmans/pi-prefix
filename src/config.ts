@@ -307,6 +307,26 @@ export function commandName(command: string): string {
   return separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, separatorIndex);
 }
 
+// WHY: JSON escaping leaves format (bidi, zero-width), C1 and line-separator
+// characters raw; those are escaped too so nothing shown to the user hides.
+const HIDDEN_TEXT_PATTERN = /[\p{Cf}\u0080-\u009f\u2028\u2029]/gu;
+const UNICODE_ESCAPE_WIDTH = 4;
+const HEX_RADIX = 16;
+
+/**
+ * Render repository text for messages and dialogs with every hidden or
+ * control character escaped. WHY: text from a repository must not be able to
+ * disguise itself in the places where the user judges it.
+ */
+export function visibleText(value: string): string {
+  return JSON.stringify(value)
+    .slice(1, -1)
+    .replace(
+      HIDDEN_TEXT_PATTERN,
+      (char) => `\\u${(char.codePointAt(0) ?? 0).toString(HEX_RADIX).padStart(UNICODE_ESCAPE_WIDTH, "0")}`,
+    );
+}
+
 /**
  * Why a project binding's command text is not allowed, or undefined when it
  * is. WHY: load-time approval and keypress dispatch share this one rule so an
@@ -577,9 +597,8 @@ export function parseProjectOverlay(
       problems.push(`binding "${key}" must be a command`);
     } else {
       const problem = projectCommandProblem(target.command);
-      // WHY: JSON.stringify escapes hidden characters so the reason shown to
-      // the user cannot itself be disguised.
-      if (problem !== undefined) problems.push(`binding "${key}" command ${JSON.stringify(target.command)} ${problem}`);
+      // WHY: escaped so the reason shown to the user cannot itself be disguised.
+      if (problem !== undefined) problems.push(`binding "${key}" command "${visibleText(target.command)}" ${problem}`);
     }
   }
   return problems.length > 0 ? { problems } : { layer, problems };
