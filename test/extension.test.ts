@@ -446,6 +446,8 @@ test("active project overlay notice names each key's command", () => {
   });
   const harness = makeHarness(env.agentDir);
   harness.startSession({ cwd: env.projectDir, trusted: true });
+  // WHY: the notice waits until the editor proves the prefix has no conflict.
+  mount(harness, makeKeybindings());
   const notice = harness.notifications.find((n) => n.message.includes("project overlay active"));
   assert.ok(notice);
   assert.ok(notice.message.includes("w -> /plan"));

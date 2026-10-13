@@ -6,7 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { EditorComponent, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
 import { randomBytes } from "node:crypto";
-import { closeSync, fchmodSync, fsyncSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { closeSync, fchmodSync, fsyncSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import {
   canonicalProjectPath,
@@ -159,7 +159,8 @@ function writeGlobalConfig(targetPath: string, text: string): void {
   try {
     const fd = openSync(tempPath, EXCLUSIVE_CREATE_FLAG, mode);
     try {
-      writeSync(fd, text);
+      // WHY: one writeSync may write only part of the text; this loops until done.
+      writeFileSync(fd, text);
       // WHY: the create mode is reduced by the umask; set it explicitly.
       fchmodSync(fd, mode);
       fsyncSync(fd);
@@ -169,11 +170,18 @@ function writeGlobalConfig(targetPath: string, text: string): void {
     renameSync(tempPath, targetPath);
     renamed = true;
     // WHY: the rename is durable only once the directory entry is flushed.
-    const dirFd = openSync(directory, DIRECTORY_OPEN_FLAG);
+    // Best-effort: the approval is already saved, and some filesystems
+    // (Windows, FUSE, network mounts) cannot open or fsync a directory, so a
+    // failure here must not report the approval as lost.
     try {
-      fsyncSync(dirFd);
-    } finally {
-      closeSync(dirFd);
+      const dirFd = openSync(directory, DIRECTORY_OPEN_FLAG);
+      try {
+        fsyncSync(dirFd);
+      } finally {
+        closeSync(dirFd);
+      }
+    } catch {
+      // WHY: durability of the directory entry is a bonus, not a requirement.
     }
   } finally {
     if (!renamed) rmSync(tempPath, { force: true });
@@ -394,20 +402,16 @@ export function setupPiPrefix(
     }
     inactiveResult = undefined;
     const overlayActive = result.config.projectKeys.size > 0;
+    // WHY: shown only once the prefix is known to be usable; a conflict
+    // disables pi-prefix, and an "active" notice next to it would mislead.
+    let overlayNotice: string | undefined;
     if (overlayActive) {
       // WHY: repository-defined keys must be visible when they go live, with
       // what each one runs, not just which keys exist.
       const projectBindings = formatProjectBindings(
         new Map([...result.config.projectKeys].map((key) => [key, result.config?.bindings.get(key)])),
       );
-      // WHY warning: Pi shows info notices in one status line that the next
-      // status (such as /reload's "Reloaded ...") overwrites in place, which
-      // hid this notice after a reload.
-      ctx.ui.notify(
-        `pi-prefix: project overlay active (${result.projectPath}): ${projectBindings.join(", ")}`,
-        OVERLAY_NOTICE_LEVEL,
-      );
-      ctx.ui.setStatus(STATUS_KEY, PROJECT_IDLE_STATUS);
+      overlayNotice = `pi-prefix: project overlay active (${visibleText(result.projectPath)}): ${projectBindings.join(", ")}`;
     }
     state = {
       result,
@@ -472,6 +476,13 @@ export function setupPiPrefix(
             },
           });
           sessionState.shortcutRegistered = true;
+          if (overlayNotice !== undefined) {
+            // WHY warning: Pi shows info notices in one status line that the
+            // next status (such as /reload's "Reloaded ...") overwrites in
+            // place, which hid this notice after a reload.
+            ctx.ui.notify(overlayNotice, OVERLAY_NOTICE_LEVEL);
+            ctx.ui.setStatus(STATUS_KEY, PROJECT_IDLE_STATUS);
+          }
         }
         sessionState.wrapper = wrapper;
         return wrapper;
