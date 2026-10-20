@@ -1,6 +1,57 @@
+# Dependabot policy. No package manager setting in this repository sets a
+# minimum release age, so the cooldown is the only supply chain window: a fresh
+# release must survive a week of public scrutiny before a bot proposes it.
 version: 2
 updates:
+  # Every action is pinned by full commit SHA, and nothing else raises those pins.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The locked toolchain is the oldest supported Pi baseline that the
+  # compatibility workflow builds on, so its drift must stay visible.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    ignore:
+      # The lockfile holds Pi 0.84.4, the oldest host the README supports, and
+      # nothing else tests it. Any version update, even a patch inside the dev
+      # range, would retire that baseline. Newer hosts are covered by the
+      # compatibility workflow instead. update-types binds version updates only,
+      # so advisory fixes still open a pull request.
+      # Pi 1.4.0 and later are outside the supported host line. A versions
+      # rule binds security updates too, so no proposal can reach them.
+      - dependency-name: "@earendil-works/*"
+        versions: [">=1.4.0"]
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+    groups:
+      # pi-coding-agent depends on pi-tui, and this repo also depends on it
+      # directly. Separate proposals resolve two pi-tui copies, so typecheck
+      # sees two distinct TUI types and fails; one group keeps them in lockstep.
+      pi:
+        patterns: ["@earendil-works/*"]
+      # A group applies to version updates only unless it says otherwise, so an
+      # advisory fix for one Pi package would split the pair again.
+      pi-security:
+        applies-to: "security-updates"
+        patterns: ["@earendil-works/*"]
+      # One pull request for the routine toolchain bumps keeps review attention
+      # on majors and on the Pi baseline.
+      dev-toolchain:
+        dependency-type: "development"
+        patterns: ["*"]
+        exclude-patterns: ["@earendil-works/*"]
+        update-types: ["minor", "patch"]
