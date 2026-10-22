@@ -1,6 +1,6 @@
-# Dependabot policy. No package manager setting in this repository sets a
-# minimum release age, so the cooldown is the only supply chain window: a fresh
-# release must survive a week of public scrutiny before a bot proposes it.
+# Dependabot policy. The supply chain window lives in .npmrc (min-release-age),
+# so the npm cooldown below mirrors it: a bot pull request and `npm install`
+# should never disagree about which release is old enough to use.
 version: 2
 updates:
   # Every action is pinned by full commit SHA, and nothing else raises those pins.
