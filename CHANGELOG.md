@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Development only: the npm override for the locked Pi 0.84.4 baseline now pins its Undici dependency to 8.12.2, which fixes GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, and GHSA-f72v-6w45-q472. The published package does not depend on Undici and is unchanged.
+
 ## 0.2.0 - 2026-10-13
 
 - **Breaking (security hardening):** project overlays are now opt-in. A `<project>/.pi/pi-prefix.json` loads only when Pi trusts the project and the user has approved that project path and the exact overlay content in the global config (`projectOverlays.allow`). Approve with `/pi-prefix allow-project`; a changed overlay is ignored until approved again. Existing overlays stay inactive until approved.
