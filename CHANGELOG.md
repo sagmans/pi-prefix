@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Development only: the npm override for the locked Pi 0.84.4 baseline now pins its Undici dependency to 8.12.2, which fixes GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, and GHSA-f72v-6w45-q472. The published package does not depend on Undici and is unchanged.
+- CI only: the compatibility and publish workflows now run on Node.js `24.22.1` instead of the floating `24` line, which could resolve to a runtime without the 2026-10-21 security fixes for CVE-2026-111497 (Brotli decoder out-of-bounds write) and CVE-2026-105483 and CVE-2026-106069 (TLS hostname check bypass). The `engines` range and the published package are unchanged.
 
 ## 0.2.0 - 2026-10-13
 
