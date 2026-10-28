@@ -1,11 +1,11 @@
 # WHY: the Pi host compatibility matrix stays in CI (not a local hook) because
 # it installs unlocked host releases; the other checks run in local git hooks.
-# Public contributions need reproducible checks without any publication
-# authority; every action is pinned to a reviewed full commit SHA.
+# Runs only on pushes to main: work lands trunk-based, so there is no PR stage
+# to gate. No publication authority; every action is pinned to a reviewed full
+# commit SHA.
 name: compatibility
 
 on:
-  pull_request:
   push:
     branches: [main]
 
