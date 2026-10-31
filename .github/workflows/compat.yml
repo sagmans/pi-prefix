@@ -13,19 +13,29 @@ permissions:
   contents: read
 
 jobs:
-  # Keep the locked baseline and each supported current host independently
-  # verifiable. WHY a matrix: a new host minor can break at import time, so
-  # the previous minor stays covered while the newest one is added.
+  # Keep each supported host independently verifiable. The lockfile tracks the
+  # newest host (dev range ^1.4.0), so the matrix covers the older hosts the
+  # peer range still promises. WHY a matrix: a new host minor can break at
+  # import time, so earlier hosts stay covered while the newest one is locked.
   compatibility-host:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        pi-version: ["1.1.0", "1.2.0"]
+        include:
+          # WHY: 0.84.4 is the peer-range floor; the dev lockfile no longer
+          # tests it. It predates the codemode, mcp and chord packages.
+          - pi-version: "0.84.4"
+            packages: "pi-coding-agent pi-tui pi-ai pi-agent-core"
+          - pi-version: "1.1.0"
+            packages: "pi-coding-agent pi-tui pi-codemode pi-ai pi-agent-core pi-mcp chord"
+          - pi-version: "1.2.0"
+            packages: "pi-coding-agent pi-tui pi-codemode pi-ai pi-agent-core pi-mcp chord"
     name: compatibility (Pi ${{ matrix.pi-version }})
     env:
       PI_VERSION: ${{ matrix.pi-version }}
+      PI_PACKAGES: ${{ matrix.packages }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,12 +48,15 @@ jobs:
           node-version: "24.22.1"
           cache: npm
       - run: npm ci --ignore-scripts
-      # The candidate host must not rewrite the oldest-supported lockfile.
+      # The candidate host must not rewrite the committed lockfile.
       # WHY every sibling: the host declares its own packages with caret
       # ranges, so a newer sibling release can break the pinned host at import
       # time; pinning all of them to the host version tests the host as it
       # was released. chord is a 1.1.0 dependency; it is harmless elsewhere.
-      - run: npm install --no-save --package-lock=false --ignore-scripts @earendil-works/pi-coding-agent@"$PI_VERSION" @earendil-works/pi-tui@"$PI_VERSION" @earendil-works/pi-codemode@"$PI_VERSION" @earendil-works/pi-ai@"$PI_VERSION" @earendil-works/pi-agent-core@"$PI_VERSION" @earendil-works/pi-mcp@"$PI_VERSION" @earendil-works/chord@"$PI_VERSION"
+      - run: |
+          specs=()
+          for pkg in $PI_PACKAGES; do specs+=("@earendil-works/${pkg}@${PI_VERSION}"); done
+          npm install --no-save --package-lock=false --ignore-scripts "${specs[@]}"
       - run: npm run typecheck
       - run: npm test
 
