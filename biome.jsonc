@@ -1,0 +1,44 @@
+// Biome is the formatter and linter for this repository. The pre-commit hook
+// checks the staged files; the pre-push hook runs `npm run lint` (biome ci).
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "formatter": {
+    "enabled": true,
+    // The existing hand style: two-space indent and this line width, so the
+    // formatter locks the style in instead of rewriting every file.
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        // Relaxed: non-null assertions here follow an explicit length check
+        // or a test setup step. tsc strict mode is the null-safety gate, and
+        // optional chaining in tests would hide a failure instead of throwing.
+        "noNonNullAssertion": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "markdown": {
+    "formatter": {
+      // Markdown keeps its hand-aligned tables and samples; markdownlint
+      // owns Markdown style.
+      "enabled": false
+    }
+  }
+}

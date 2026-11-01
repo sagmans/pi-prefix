@@ -1,0 +1,22 @@
+#!/bin/sh
+# Runs Biome (format and lint) on the staged files, so style and lint errors
+# stop at commit time. Biome reads the working-tree copies; the pre-push hook
+# runs `npm run lint` on the exact pushed commit.
+set -eu
+
+# Helpers (staged_git, pushed_shas, at_sha, darwin_only) from .githooks/lib.
+# shellcheck source=/dev/null
+. "${HOOK_HELPERS:?run from .githooks (scripts/setup-hooks)}"
+
+# The pinned Biome from this clone's install, never another one on PATH; a
+# missing install blocks the commit.
+biome="$(git rev-parse --show-toplevel)/node_modules/.bin/biome"
+[ -x "$biome" ] || { echo "pre-commit: Biome is not installed; run npm ci" >&2; exit 1; }
+
+# The NUL-separated list goes through a file: a pipeline would hide a failing
+# staged_git (sh has no pipefail), and NUL keeps any file name intact.
+list=$(mktemp) || exit 1
+trap 'rm -f "$list"' EXIT
+staged_git diff --cached --name-only --diff-filter=ACMR -z >"$list" || exit 1
+[ -s "$list" ] || exit 0
+xargs -0 "$biome" check --error-on-warnings --no-errors-on-unmatched --files-ignore-unknown=true -- <"$list"

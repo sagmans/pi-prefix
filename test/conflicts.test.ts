@@ -1,5 +1,5 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { KeybindingsManager } from "@earendil-works/pi-tui";
 import { findPrefixConflicts } from "../src/conflicts.ts";
 
@@ -21,22 +21,21 @@ function makeManager(userBindings = {}): KeybindingsManager {
 
 test("editor binding collision is reported", () => {
   const conflicts = findPrefixConflicts("ctrl+b", makeManager());
-  assert.deepEqual(conflicts, [
-    { key: "ctrl+b", keybinding: "tui.editor.cursorLeft" },
-  ]);
+  assert.deepEqual(conflicts, [{ key: "ctrl+b", keybinding: "tui.editor.cursorLeft" }]);
 });
 
 test("app binding collision is reported", () => {
   const conflicts = findPrefixConflicts("ctrl+l", makeManager());
-  assert.deepEqual(conflicts, [
-    { key: "ctrl+l", keybinding: "app.model.select" },
-  ]);
+  assert.deepEqual(conflicts, [{ key: "ctrl+l", keybinding: "app.model.select" }]);
 });
 
 test("multiple collisions are all reported in stable order", () => {
-  const conflicts = findPrefixConflicts("ctrl+x", makeManager({
-    "app.model.select": "ctrl+x",
-  }));
+  const conflicts = findPrefixConflicts(
+    "ctrl+x",
+    makeManager({
+      "app.model.select": "ctrl+x",
+    }),
+  );
   assert.deepEqual(conflicts, [
     { key: "ctrl+x", keybinding: "app.message.copy" },
     { key: "ctrl+x", keybinding: "app.model.select" },
@@ -44,12 +43,13 @@ test("multiple collisions are all reported in stable order", () => {
 });
 
 test("normalized spelling of the same key still collides", () => {
-  const conflicts = findPrefixConflicts("ctrl+alt+l", makeManager({
-    "app.model.select": "alt+ctrl+l",
-  }));
-  assert.deepEqual(conflicts, [
-    { key: "ctrl+alt+l", keybinding: "app.model.select" },
-  ]);
+  const conflicts = findPrefixConflicts(
+    "ctrl+alt+l",
+    makeManager({
+      "app.model.select": "alt+ctrl+l",
+    }),
+  );
+  assert.deepEqual(conflicts, [{ key: "ctrl+alt+l", keybinding: "app.model.select" }]);
 });
 
 test("free prefix yields no conflicts", () => {
@@ -63,17 +63,21 @@ test("picker-only bindings are not conflicts", () => {
 });
 
 test("user-rebound keys replace defaults in the scan", () => {
-  const conflicts = findPrefixConflicts("f9", makeManager({
-    "app.model.select": "f9",
-  }));
-  assert.deepEqual(conflicts, [
-    { key: "f9", keybinding: "app.model.select" },
-  ]);
+  const conflicts = findPrefixConflicts(
+    "f9",
+    makeManager({
+      "app.model.select": "f9",
+    }),
+  );
+  assert.deepEqual(conflicts, [{ key: "f9", keybinding: "app.model.select" }]);
 });
 
 test("unbound action replaced with empty array is no conflict", () => {
-  const conflicts = findPrefixConflicts("ctrl+l", makeManager({
-    "app.model.select": [],
-  }));
+  const conflicts = findPrefixConflicts(
+    "ctrl+l",
+    makeManager({
+      "app.model.select": [],
+    }),
+  );
   assert.deepEqual(conflicts, []);
 });

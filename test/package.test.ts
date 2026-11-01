@@ -1,8 +1,8 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,10 +17,7 @@ test("pi manifest references existing extension and skill paths", () => {
   for (const skill of manifest.pi.skills) {
     assert.ok(existsSync(join(packageRoot, skill)), `missing skill dir: ${skill}`);
   }
-  assert.ok(
-    existsSync(join(packageRoot, "skills", "pi-prefix", "SKILL.md")),
-    "skill entrypoint missing",
-  );
+  assert.ok(existsSync(join(packageRoot, "skills", "pi-prefix", "SKILL.md")), "skill entrypoint missing");
 });
 
 test("packaged files match the exact allowlist", () => {

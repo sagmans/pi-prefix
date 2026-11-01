@@ -1,15 +1,9 @@
-import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import type { AppKeybinding, KeybindingsManager } from "@earendil-works/pi-coding-agent";
+import { CustomEditor } from "@earendil-works/pi-coding-agent";
+import type { AutocompleteProvider, EditorComponent, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
 import { matchesKey } from "@earendil-works/pi-tui";
-import type {
-  AutocompleteProvider,
-  EditorComponent,
-  EditorTheme,
-  KeyId,
-  TUI,
-} from "@earendil-works/pi-tui";
-import { projectCommandProblem } from "./config.ts";
 import type { EffectivePrefixConfig, PrefixTarget } from "./config.ts";
+import { projectCommandProblem } from "./config.ts";
 
 export type PrefixEditorOptions = {
   config: EffectivePrefixConfig;
@@ -36,7 +30,6 @@ const INTERRUPT_ACTION: AppKeybinding = "app.interrupt";
 const EXIT_ACTION: AppKeybinding = "app.exit";
 const PASTE_IMAGE_ACTION: AppKeybinding = "app.clipboard.pasteImage";
 const CANCEL_KEY: KeyId = "escape";
-const STATUS_KEY = "pi-prefix";
 const ENTER_INPUT = "\r";
 
 // Layer prefix behavior over whichever editor another extension installed.
@@ -205,8 +198,7 @@ export class PrefixEditor extends CustomEditor {
       return;
     }
     // WHY: exhaustiveness guard so a future target kind fails compilation.
-    const exhaustive: never = target;
-    return exhaustive;
+    const _exhaustive: never = target;
   }
 
   handleInput(data: string): void {

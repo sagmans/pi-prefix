@@ -1,12 +1,17 @@
 #!/bin/sh
-# Runs typecheck, tests, the audit and a pack dry-run on each pushed commit.
-# The Pi host compatibility matrix stays in CI (.github/workflows/compat.yml).
+# Runs typecheck, tests, Biome, the dependency audits and a pack dry-run on
+# each pushed commit. The Pi host compatibility matrix stays in CI
+# (.github/workflows/compat.yml).
 set -eu
 
 checks() {
 	npm run typecheck || return 1
 	npm test || return 1
+	npm run lint || return 1
+	# Dependency gates: known high or critical advisories, and registry
+	# signatures plus provenance of every installed package.
 	npm audit --audit-level=high || return 1
+	npm audit signatures || return 1
 	npm pack --dry-run >/dev/null || return 1
 }
 

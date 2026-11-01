@@ -52,13 +52,7 @@ export type LoadConfigOptions = {
  * Why the project overlay was or was not applied; drives the load-time notice
  * and the status command so users can see which opt-in step is missing.
  */
-export type ProjectOverlayState =
-  | "absent"
-  | "untrusted"
-  | "not-allowed"
-  | "changed"
-  | "rejected"
-  | "loaded";
+export type ProjectOverlayState = "absent" | "untrusted" | "not-allowed" | "changed" | "rejected" | "loaded";
 
 export type LoadConfigResult = {
   config?: EffectivePrefixConfig;
@@ -102,9 +96,7 @@ const SPECIAL_KEYS = new Set([
   ...Array.from({ length: 12 }, (_, index) => `f${index + 1}`),
 ]);
 
-const SYMBOL_KEYS = new Set(
-  "`-=[]\\;',./!@#$%^&*()_+|~{}:<>?".split(""),
-);
+const SYMBOL_KEYS = new Set("`-=[]\\;',./!@#$%^&*()_+|~{}:<>?".split(""));
 
 const LAYER_TOP_LEVEL_KEYS = new Set(["$schema", "prefix", "timeoutMs", "bindings", "projectOverlays"]);
 const PROJECT_OVERLAYS_KEY = "projectOverlays";
@@ -117,13 +109,7 @@ const HASH_ALGORITHM = "sha256";
 const HASH_ENCODING = "hex";
 // WHY: these built-ins upload, export, re-authenticate, change trust, or end
 // the session; a repository must never reach them through a single keypress.
-export const PROJECT_BLOCKED_COMMANDS: ReadonlySet<string> = new Set([
-  "share",
-  "export",
-  "login",
-  "trust",
-  "quit",
-]);
+export const PROJECT_BLOCKED_COMMANDS: ReadonlySet<string> = new Set(["share", "export", "login", "trust", "quit"]);
 // WHY: a repository chooses project binding text, so it must be exactly one
 // plain command name: no arguments (their meaning depends on each extension),
 // no case or slash variants, and nothing that only the keypress check refuses.
@@ -155,11 +141,7 @@ export const MAX_OVERLAY_BYTES = 64 * 1024;
 // regular-file check can refuse it.
 const OVERLAY_OPEN_FLAGS = constants.O_RDONLY | constants.O_NONBLOCK;
 
-const DEFAULTS_PATH = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "defaults.json",
-);
+const DEFAULTS_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "defaults.json");
 
 function isLetter(value: string): boolean {
   return value.length === 1 && value >= "a" && value <= "z";
@@ -288,9 +270,7 @@ function validateTarget(
     diagnostics.push({ level: "error", path, message: `binding "${keyLabel}" payload must be an object` });
     return undefined;
   }
-  return record.payload !== undefined
-    ? { event: record.event, payload: record.payload }
-    : { event: record.event };
+  return record.payload !== undefined ? { event: record.event, payload: record.payload } : { event: record.event };
 }
 
 type ParsedLayer = {
@@ -362,7 +342,9 @@ function parseApprovals(
 ): ProjectOverlayApproval[] | undefined {
   const record = value as Record<string, unknown> | null;
   if (
-    typeof value !== "object" || record === null || Array.isArray(value) ||
+    typeof value !== "object" ||
+    record === null ||
+    Array.isArray(value) ||
     Object.keys(record).some((key) => key !== PROJECT_OVERLAY_ALLOW_KEY) ||
     !Array.isArray(record[PROJECT_OVERLAY_ALLOW_KEY])
   ) {
@@ -375,10 +357,14 @@ function parseApprovals(
     // WHY: relative paths or globs would let one approval cover directories
     // the user never inspected.
     if (
-      typeof entry !== "object" || item === null || Array.isArray(entry) ||
+      typeof entry !== "object" ||
+      item === null ||
+      Array.isArray(entry) ||
       Object.keys(item).some((key) => !APPROVAL_KEYS.has(key)) ||
-      typeof item.path !== "string" || !isAbsolute(item.path) ||
-      typeof item.sha256 !== "string" || !SHA256_PATTERN.test(item.sha256)
+      typeof item.path !== "string" ||
+      !isAbsolute(item.path) ||
+      typeof item.sha256 !== "string" ||
+      !SHA256_PATTERN.test(item.sha256)
     ) {
       diagnostics.push({
         level: "error",
@@ -439,7 +425,11 @@ function parseLayer(
     // WHY: any positive integer is accepted by design; the guard only rejects
     // values a timer cannot schedule meaningfully.
     if (typeof timeout !== "number" || !Number.isInteger(timeout) || timeout <= 0) {
-      diagnostics.push({ level: "error", path, message: `timeoutMs must be a positive integer, got ${String(timeout)}` });
+      diagnostics.push({
+        level: "error",
+        path,
+        message: `timeoutMs must be a positive integer, got ${String(timeout)}`,
+      });
       return undefined;
     }
     layer.timeoutMs = timeout;
@@ -492,10 +482,7 @@ function readRaw(path: string): string | undefined {
 }
 
 /** Result of a guarded overlay read: bytes, nothing there, or a refusal. */
-export type OverlayRead =
-  | { kind: "absent" }
-  | { kind: "refused"; reason: string }
-  | { kind: "bytes"; bytes: Buffer };
+export type OverlayRead = { kind: "absent" } | { kind: "refused"; reason: string } | { kind: "bytes"; bytes: Buffer };
 
 /** Whether something exists at the overlay path, without opening it. */
 export function overlayExists(path: string): boolean {
@@ -544,11 +531,7 @@ export function readOverlayFile(path: string): OverlayRead {
   }
 }
 
-function readLayer(
-  path: string,
-  isDefaults: boolean,
-  diagnostics: ConfigDiagnostic[],
-): ParsedLayer | undefined {
+function readLayer(path: string, isDefaults: boolean, diagnostics: ConfigDiagnostic[]): ParsedLayer | undefined {
   const raw = readRaw(path);
   return raw === undefined ? undefined : parseLayer(raw, path, isDefaults, diagnostics);
 }

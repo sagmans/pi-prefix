@@ -1,12 +1,25 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, lstatSync, renameSync, rmSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
+import type { EditorComponent } from "@earendil-works/pi-tui";
 import { KeybindingsManager } from "@earendil-works/pi-tui";
 import { setupPiPrefix } from "../index.ts";
 import { hashOverlay } from "../src/config.ts";
-import type { EditorComponent } from "@earendil-works/pi-tui";
 
 type SavedShortcut = { shortcut: string; handler: () => void };
 
@@ -32,9 +45,7 @@ function makeHarness(agentDir: string): Harness {
   const commands = new Map();
   const shortcuts: SavedShortcut[] = [];
   const userMessages: UserMessage[] = [];
-  const availableCommands: Array<{ name: string; source: string }> = [
-    { name: "plan", source: "extension" },
-  ];
+  const availableCommands: Array<{ name: string; source: string }> = [{ name: "plan", source: "extension" }];
   const events: Array<{ event: string; payload?: unknown }> = [];
   const notifications: Array<{ message: string; type?: string }> = [];
   const statuses: Array<[string, string | undefined]> = [];
@@ -104,9 +115,7 @@ function writeAgentConfig(agentDir: string, value: unknown): void {
 function makeKeybindings(defaults: Record<string, unknown> = {}): KeybindingsManager {
   const definitions: Record<string, { defaultKeys: unknown }> = {
     "tui.input.submit": { defaultKeys: "enter" },
-    ...Object.fromEntries(
-      Object.entries(defaults).map(([id, keys]) => [id, { defaultKeys: keys }]),
-    ),
+    ...Object.fromEntries(Object.entries(defaults).map(([id, keys]) => [id, { defaultKeys: keys }])),
   };
   return new KeybindingsManager(definitions as never);
 }
@@ -169,12 +178,9 @@ test("free prefix installs a composing editor and registers the shortcut", () =>
   assert.equal(harness.shortcuts.length, 1);
   assert.equal(harness.shortcuts[0].shortcut, "ctrl+x");
   let dispatched = 0;
-  (editor as never as { onAction: (a: string, h: () => void) => void }).onAction(
-    "app.model.select",
-    () => {
-      dispatched += 1;
-    },
-  );
+  (editor as never as { onAction: (a: string, h: () => void) => void }).onAction("app.model.select", () => {
+    dispatched += 1;
+  });
   harness.shortcuts[0].handler();
   editor.handleInput("m");
   assert.equal(dispatched, 1);
@@ -348,7 +354,10 @@ function makeApproveEnv(overlay: unknown = { bindings: { w: { command: "/plan", 
   mkdirSync(join(projectDir, ".pi"), { recursive: true });
   writeAgentConfig(agentDir, { prefix: "ctrl+x", bindings: { h: { command: "/hotkeys", submit: true } } });
   chmodSync(join(agentDir, "pi-prefix.json"), 0o600);
-  writeFileSync(join(projectDir, ".pi", "pi-prefix.json"), typeof overlay === "string" ? overlay : JSON.stringify(overlay));
+  writeFileSync(
+    join(projectDir, ".pi", "pi-prefix.json"),
+    typeof overlay === "string" ? overlay : JSON.stringify(overlay),
+  );
   const harness = makeHarness(agentDir);
   const handler = harness.commands.get("pi-prefix");
   assert.ok(handler);
@@ -390,7 +399,10 @@ test("accepting approval pins one entry and keeps the file mode", async () => {
   );
   assert.equal(written.prefix, "ctrl+x");
   assert.equal(statSync(env.globalPath).mode & 0o777, 0o600);
-  assert.deepEqual(readdirSync(env.agentDir).filter((name) => name.endsWith(".tmp")), []);
+  assert.deepEqual(
+    readdirSync(env.agentDir).filter((name) => name.endsWith(".tmp")),
+    [],
+  );
   assert.ok(notifications.some((n) => n.message.includes("approved")));
 });
 
@@ -400,7 +412,10 @@ test("approval is refused without the interactive UI or project trust", async ()
     const { ctx, dialogs, notifications } = makeApproveContext(env.projectDir, "Yes, approve", overrides);
     await env.handler("allow-project", ctx);
     assert.equal(dialogs.length, 0, JSON.stringify(overrides));
-    assert.ok(notifications.some((n) => n.type === "error"), JSON.stringify(overrides));
+    assert.ok(
+      notifications.some((n) => n.type === "error"),
+      JSON.stringify(overrides),
+    );
     assert.equal(readFileSync(env.globalPath, "utf8"), env.before);
   }
 });
@@ -463,7 +478,10 @@ test("approval refuses device, FIFO and oversized overlays without hanging", asy
     const { ctx, dialogs, notifications } = makeApproveContext(env.projectDir, "Yes, approve");
     await env.handler("allow-project", ctx);
     assert.equal(dialogs.length, 0, target);
-    assert.ok(notifications.some((n) => n.type === "error" && n.message.includes("not approvable")), target);
+    assert.ok(
+      notifications.some((n) => n.type === "error" && n.message.includes("not approvable")),
+      target,
+    );
     assert.equal(readFileSync(env.globalPath, "utf8"), env.before);
   }
 });

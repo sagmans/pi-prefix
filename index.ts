@@ -1,13 +1,21 @@
-import { CustomEditor, getAgentDir } from "@earendil-works/pi-coding-agent";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  KeybindingsManager,
-} from "@earendil-works/pi-coding-agent";
-import type { EditorComponent, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
 import { randomBytes } from "node:crypto";
-import { closeSync, fchmodSync, fsyncSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  fchmodSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, join } from "node:path";
+import type { ExtensionAPI, ExtensionContext, KeybindingsManager } from "@earendil-works/pi-coding-agent";
+import { CustomEditor, getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { EditorComponent, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
+import type { LoadConfigResult, ProjectOverlayApproval } from "./src/config.ts";
 import {
   canonicalProjectPath,
   commandName,
@@ -18,10 +26,9 @@ import {
   readUserBindings,
   visibleText,
 } from "./src/config.ts";
-import type { LoadConfigResult, ProjectOverlayApproval } from "./src/config.ts";
-import { findPrefixConflicts } from "./src/conflicts.ts";
 import type { PrefixConflict } from "./src/conflicts.ts";
-import { PrefixEditor, PROJECT_STATUS_MARKER } from "./src/prefix-editor.ts";
+import { findPrefixConflicts } from "./src/conflicts.ts";
+import { PROJECT_STATUS_MARKER, PrefixEditor } from "./src/prefix-editor.ts";
 
 const STATUS_KEY = "pi-prefix";
 const STATUS_COMMAND = "pi-prefix";
@@ -205,7 +212,8 @@ function formatProjectBindings(bindings: ReadonlyMap<string, unknown>, lookup?: 
     // WHY: without a lookup (startup notice) only key and command are shown.
     const info = lookup?.(commandName(command));
     const parts = [info?.path, info?.description].filter((part): part is string => part !== undefined && part !== "");
-    const detail = lookup === undefined ? "" : info === undefined ? UNREGISTERED_COMMAND_NOTE : parts.map(visibleText).join(" - ");
+    const detail =
+      lookup === undefined ? "" : info === undefined ? UNREGISTERED_COMMAND_NOTE : parts.map(visibleText).join(" - ");
     lines.push(`${visibleText(key)} -> ${visibleText(command)}${detail.length > 0 ? `  (${detail})` : ""}`);
   }
   return lines;
@@ -353,10 +361,7 @@ function approvableGlobalConfig(text: string | undefined): Record<string, unknow
   return record;
 }
 
-export function setupPiPrefix(
-  pi: ExtensionAPI,
-  options: { agentDir: string },
-): void {
+export function setupPiPrefix(pi: ExtensionAPI, options: { agentDir: string }): void {
   let state: SessionState | undefined;
   // WHY: an inactive session has no SessionState, but its load diagnostics
   // must stay reachable from the status command.
@@ -368,9 +373,9 @@ export function setupPiPrefix(
       if (args.trim() === ALLOW_PROJECT_SUBCOMMAND) {
         const paths = loadConfig({ agentDir: options.agentDir, cwd: ctx.cwd, projectTrusted: false });
         await allowProject(ctx, paths.globalPath, paths.projectPath, (name) => {
-          const command = pi.getCommands().find(
-            (available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE,
-          );
+          const command = pi
+            .getCommands()
+            .find((available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE);
           return command === undefined
             ? undefined
             : { description: command.description, path: command.sourceInfo?.path };
@@ -423,71 +428,66 @@ export function setupPiPrefix(
     const sessionState: SessionState = state;
     const isExtensionCommand = (command: string): boolean => {
       const name = commandName(command);
-      return pi.getCommands().some(
-        (available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE,
-      );
+      return pi
+        .getCommands()
+        .some((available) => available.name === name && available.source === EXTENSION_COMMAND_SOURCE);
     };
     const previousFactory = ctx.ui.getEditorComponent();
-    ctx.ui.setEditorComponent(
-      (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
-        const inner: EditorComponent = previousFactory
-          ? previousFactory(tui, theme, keybindings)
-          : new CustomEditor(tui, theme, keybindings);
-        const config = sessionState.result.config;
-        if (config === undefined) {
-          return inner;
+    ctx.ui.setEditorComponent((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
+      const inner: EditorComponent = previousFactory
+        ? previousFactory(tui, theme, keybindings)
+        : new CustomEditor(tui, theme, keybindings);
+      const config = sessionState.result.config;
+      if (config === undefined) {
+        return inner;
+      }
+      const wrapper = new PrefixEditor(tui, theme, keybindings, inner, {
+        config,
+        emitEvent: (event, payload) => pi.events.emit(event, payload),
+        setStatus: (text) => ctx.ui.setStatus(STATUS_KEY, text),
+        notify: (message, type) => ctx.ui.notify(message, type),
+        isExtensionCommand,
+        idleStatus: overlayActive ? PROJECT_IDLE_STATUS : undefined,
+        dispatchExtensionCommand: (command) => {
+          if (!isExtensionCommand(command)) return false;
+          // WHY: newer Pi hosts treat a starting run as busy and reject
+          // sendUserMessage without deliverAs; steer matches what Enter does
+          // for typed input while the agent is working.
+          pi.sendUserMessage(command, { expandPromptTemplates: true, deliverAs: DELIVER_WHILE_BUSY });
+          return true;
+        },
+      });
+      if (!sessionState.shortcutRegistered) {
+        // WHY: the editor factory is the only place Pi hands extensions the
+        // authoritative keybinding manager, so conflict scanning and native
+        // registration both happen here, once per session.
+        const conflicts = findPrefixConflicts(config.prefix, keybindings);
+        if (conflicts.length > 0) {
+          sessionState.conflicts = conflicts;
+          const ids = conflicts.map((conflict) => conflict.keybinding).join(", ");
+          ctx.ui.notify(`pi-prefix disabled: prefix ${config.prefix} conflicts with ${ids}`, "error");
+          wrapper.dispose();
+          sessionState.wrapper = wrapper;
+          return wrapper;
         }
-        const wrapper = new PrefixEditor(tui, theme, keybindings, inner, {
-          config,
-          emitEvent: (event, payload) => pi.events.emit(event, payload),
-          setStatus: (text) => ctx.ui.setStatus(STATUS_KEY, text),
-          notify: (message, type) => ctx.ui.notify(message, type),
-          isExtensionCommand,
-          idleStatus: overlayActive ? PROJECT_IDLE_STATUS : undefined,
-          dispatchExtensionCommand: (command) => {
-            if (!isExtensionCommand(command)) return false;
-            // WHY: newer Pi hosts treat a starting run as busy and reject
-            // sendUserMessage without deliverAs; steer matches what Enter does
-            // for typed input while the agent is working.
-            pi.sendUserMessage(command, { expandPromptTemplates: true, deliverAs: DELIVER_WHILE_BUSY });
-            return true;
+        pi.registerShortcut(config.prefix as KeyId, {
+          description: SHORTCUT_DESCRIPTION,
+          handler: () => {
+            sessionState.wrapper?.activate();
           },
         });
-        if (!sessionState.shortcutRegistered) {
-          // WHY: the editor factory is the only place Pi hands extensions the
-          // authoritative keybinding manager, so conflict scanning and native
-          // registration both happen here, once per session.
-          const conflicts = findPrefixConflicts(config.prefix, keybindings);
-          if (conflicts.length > 0) {
-            sessionState.conflicts = conflicts;
-            const ids = conflicts.map((conflict) => conflict.keybinding).join(", ");
-            ctx.ui.notify(
-              `pi-prefix disabled: prefix ${config.prefix} conflicts with ${ids}`,
-              "error",
-            );
-            wrapper.dispose();
-            sessionState.wrapper = wrapper;
-            return wrapper;
-          }
-          pi.registerShortcut(config.prefix as KeyId, {
-            description: SHORTCUT_DESCRIPTION,
-            handler: () => {
-              sessionState.wrapper?.activate();
-            },
-          });
-          sessionState.shortcutRegistered = true;
-          if (overlayNotice !== undefined) {
-            // WHY warning: Pi shows info notices in one status line that the
-            // next status (such as /reload's "Reloaded ...") overwrites in
-            // place, which hid this notice after a reload.
-            ctx.ui.notify(overlayNotice, OVERLAY_NOTICE_LEVEL);
-            ctx.ui.setStatus(STATUS_KEY, PROJECT_IDLE_STATUS);
-          }
+        sessionState.shortcutRegistered = true;
+        if (overlayNotice !== undefined) {
+          // WHY warning: Pi shows info notices in one status line that the
+          // next status (such as /reload's "Reloaded ...") overwrites in
+          // place, which hid this notice after a reload.
+          ctx.ui.notify(overlayNotice, OVERLAY_NOTICE_LEVEL);
+          ctx.ui.setStatus(STATUS_KEY, PROJECT_IDLE_STATUS);
         }
-        sessionState.wrapper = wrapper;
-        return wrapper;
-      },
-    );
+      }
+      sessionState.wrapper = wrapper;
+      return wrapper;
+    });
   });
 
   pi.on("session_shutdown", (_event, ctx) => {

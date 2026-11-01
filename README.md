@@ -237,5 +237,5 @@ Checks run in tracked local Git hooks instead of push/PR CI. Run `scripts/setup-
 
 This repository's checks:
 
-- `pre-commit`: staged whitespace and conflict-marker check.
-- `pre-push`: typecheck, tests, `npm audit --audit-level=high`, pack dry-run. The Pi 1.1.0 and 1.2.0 host compatibility matrix stays in CI (`.github/workflows/compat.yml`).
+- `pre-commit`: staged whitespace and conflict-marker check; Biome format and lint on the staged files (`npm run lint:fix` fixes most findings).
+- `pre-push`: typecheck, tests, `npm run lint` (Biome), `npm audit --audit-level=high`, `npm audit signatures`, pack dry-run. The Pi 1.1.0 and 1.2.0 host compatibility matrix stays in CI (`.github/workflows/compat.yml`).

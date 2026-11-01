@@ -33,7 +33,9 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome ci --error-on-warnings .",
+    "lint:fix": "biome check --write ."
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0",
@@ -45,6 +47,7 @@
     }
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.3",
     "@earendil-works/pi-coding-agent": "^1.4.0",
     "@earendil-works/pi-tui": "^1.4.0",
     "@types/node": "^26.6.5",

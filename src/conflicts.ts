@@ -1,4 +1,4 @@
-import type { KeyId, KeybindingsManager } from "@earendil-works/pi-tui";
+import type { KeybindingsManager, KeyId } from "@earendil-works/pi-tui";
 import { normalizeKeyId } from "./config.ts";
 
 export type PrefixConflict = {
@@ -35,16 +35,10 @@ const MAIN_EDITOR_PREFIXES = ["tui.editor.", "tui.input."];
 const MAIN_EDITOR_IDS = new Set<string>(MAIN_EDITOR_APP_ACTIONS);
 
 function isMainEditorBinding(id: string): boolean {
-  return (
-    MAIN_EDITOR_IDS.has(id) ||
-    MAIN_EDITOR_PREFIXES.some((prefix) => id.startsWith(prefix))
-  );
+  return MAIN_EDITOR_IDS.has(id) || MAIN_EDITOR_PREFIXES.some((prefix) => id.startsWith(prefix));
 }
 
-export function findPrefixConflicts(
-  prefix: KeyId,
-  keybindings: KeybindingsManager,
-): PrefixConflict[] {
+export function findPrefixConflicts(prefix: KeyId, keybindings: KeybindingsManager): PrefixConflict[] {
   const normalizedPrefix = normalizeKeyId(prefix);
   if (normalizedPrefix === undefined) {
     return [];

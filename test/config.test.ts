@@ -1,9 +1,9 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
 import { hashOverlay, loadConfig, MAX_OVERLAY_BYTES, normalizeKeyId } from "../src/config.ts";
 
 type Env = {
@@ -21,8 +21,7 @@ function makeEnv(): Env {
   return {
     agentDir,
     projectDir,
-    load: (projectTrusted: boolean) =>
-      loadConfig({ agentDir, cwd: projectDir, projectTrusted }),
+    load: (projectTrusted: boolean) => loadConfig({ agentDir, cwd: projectDir, projectTrusted }),
   };
 }
 
@@ -298,13 +297,19 @@ test("inherited object property names fail closed as binding keys and prefix", (
     );
     const bindingResult = asBinding.load(false);
     assert.equal(bindingResult.config, undefined, name);
-    assert.ok(bindingResult.diagnostics.some((d) => d.level === "error" && d.message.includes("not a valid key id")), name);
+    assert.ok(
+      bindingResult.diagnostics.some((d) => d.level === "error" && d.message.includes("not a valid key id")),
+      name,
+    );
 
     const asPrefix = makeEnv();
     writeGlobal(asPrefix, { ...GLOBAL_CONFIG, prefix: name });
     const prefixResult = asPrefix.load(false);
     assert.equal(prefixResult.config, undefined, name);
-    assert.ok(prefixResult.diagnostics.some((d) => d.level === "error" && d.message.includes("not a valid key id")), name);
+    assert.ok(
+      prefixResult.diagnostics.some((d) => d.level === "error" && d.message.includes("not a valid key id")),
+      name,
+    );
   }
 });
 
@@ -416,7 +421,10 @@ test("rejection reasons show hidden characters as escapes", () => {
   const env = makeEnv();
   writeProject(env, { bindings: { w: { command: "/probe\u200b", submit: true } } });
   approve(env);
-  const message = env.load(true).diagnostics.map((d) => d.message).join("\n");
+  const message = env
+    .load(true)
+    .diagnostics.map((d) => d.message)
+    .join("\n");
   assert.ok(message.includes("/probe\\u200b"), message);
   assert.ok(!message.includes("\u200b"));
 });

@@ -1,9 +1,9 @@
-import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { KeybindingsManager } from "@earendil-works/pi-tui";
-import { PrefixEditor } from "../src/prefix-editor.ts";
-import type { EffectivePrefixConfig, PrefixTarget } from "../src/config.ts";
+import { mock, test } from "node:test";
 import type { KeyId } from "@earendil-works/pi-tui";
+import { KeybindingsManager } from "@earendil-works/pi-tui";
+import type { EffectivePrefixConfig, PrefixTarget } from "../src/config.ts";
+import { PrefixEditor } from "../src/prefix-editor.ts";
 
 const SUBMIT_KEY_INPUT = "\r";
 
@@ -16,9 +16,7 @@ const BASE_TARGETS: Record<string, PrefixTarget> = {
 
 function makeConfig(overrides: Record<string, PrefixTarget> = {}): EffectivePrefixConfig {
   const targets = { ...BASE_TARGETS, ...overrides };
-  const bindings = new Map<KeyId, PrefixTarget>(
-    Object.entries(targets) as [KeyId, PrefixTarget][],
-  );
+  const bindings = new Map<KeyId, PrefixTarget>(Object.entries(targets) as [KeyId, PrefixTarget][]);
   return { prefix: "ctrl+x", timeoutMs: 2000, bindings, projectKeys: new Set<KeyId>() };
 }
 
@@ -234,9 +232,7 @@ test("event target emits the exact payload", () => {
   const { editor, events } = makeEditor();
   editor.activate();
   editor.handleInput("o");
-  assert.deepEqual(events, [
-    { event: "example:open", payload: { source: "pi-prefix" } },
-  ]);
+  assert.deepEqual(events, [{ event: "example:open", payload: { source: "pi-prefix" } }]);
 });
 
 test("repeated activation keeps prefix mode active", () => {
@@ -306,7 +302,10 @@ test("refused project keys never reach the editor or dispatch", () => {
       assert.deepEqual(calls.texts, [], command);
       assert.deepEqual(calls.input, [], command);
       assert.deepEqual(dispatches, [], command);
-      assert.ok(notifications.some((n) => n.message.includes("refused")), command);
+      assert.ok(
+        notifications.some((n) => n.message.includes("refused")),
+        command,
+      );
     }
   }
 });
