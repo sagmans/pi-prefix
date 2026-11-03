@@ -28,3 +28,8 @@ cloning. All checks must pass before you push. Never use `--no-verify`.
 `npm run lint`, `npm audit --audit-level=high`, `npm audit signatures`, pack
 dry-run. The Pi 0.84.4, 1.1.0 and 1.2.0 host compatibility matrix stays in CI
 (`.github/workflows/compat.yml`).
+
+Commit messages follow `.githooks/GIT_CONVENTION.md`, which `commit-msg` and
+`pre-push` enforce. The generic checks need gitleaks, osv-scanner, semgrep,
+lizard and markdownlint-cli2, plus actionlint and zizmor when a push changes
+workflow files. A missing tool blocks the hook.
