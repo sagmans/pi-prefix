@@ -2,6 +2,10 @@
 // checks the staged files; the pre-push hook runs `npm run lint` (biome ci).
 {
   "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+  "files": {
+    // The copied hook template stays byte-identical to its source.
+    "includes": ["**", "!.githooks/lib"]
+  },
   "vcs": {
     "enabled": true,
     "clientKind": "git",
