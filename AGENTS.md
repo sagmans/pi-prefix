@@ -22,4 +22,9 @@ use the disposable `HOME` from the DOGFOOD.md setup.
 
 ## Git hooks
 
-Checks run in `.githooks/`, not in push/PR CI. Run `scripts/setup-hooks` after cloning. All checks must pass before you push. Never use `--no-verify`. `pre-commit`: Biome on the staged files. `pre-push`: typecheck, tests, `npm run lint`, `npm audit --audit-level=high`, `npm audit signatures`, pack dry-run. The Pi 0.84.4, 1.1.0 and 1.2.0 host compatibility matrix stays in CI (`.github/workflows/compat.yml`).
+Checks run in `.githooks/`, not in push/PR CI. Run `scripts/setup-hooks` after
+cloning. All checks must pass before you push. Never use `--no-verify`.
+`pre-commit`: Biome on the staged files. `pre-push`: typecheck, tests,
+`npm run lint`, `npm audit --audit-level=high`, `npm audit signatures`, pack
+dry-run. The Pi 0.84.4, 1.1.0 and 1.2.0 host compatibility matrix stays in CI
+(`.github/workflows/compat.yml`).

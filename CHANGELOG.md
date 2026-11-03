@@ -2,59 +2,121 @@
 
 ## Unreleased
 
-- Development only: the npm override for the locked Pi 0.84.4 baseline now pins its Undici dependency to 8.12.2, which fixes GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, and GHSA-f72v-6w45-q472. The published package does not depend on Undici and is unchanged.
-- CI only: the compatibility and publish workflows now run on Node.js `24.22.1` instead of the floating `24` line, which could resolve to a runtime without the 2026-10-21 security fixes for CVE-2026-111497 (Brotli decoder out-of-bounds write) and CVE-2026-105483 and CVE-2026-106069 (TLS hostname check bypass). The `engines` range and the published package are unchanged.
+- Development only: the npm override for the locked Pi 0.84.4 baseline now pins
+  its Undici dependency to 8.12.2, which fixes GHSA-xjj6-f33q-929c,
+  GHSA-4qv8-2p9j-2685, and GHSA-f72v-6w45-q472. The published package does not
+  depend on Undici and is unchanged.
+- CI only: the compatibility and publish workflows now run on Node.js `24.22.1`
+  instead of the floating `24` line, which could resolve to a runtime without
+  the 2026-10-21 security fixes for CVE-2026-111497 (Brotli decoder
+  out-of-bounds write) and CVE-2026-105483 and CVE-2026-106069 (TLS hostname
+  check bypass). The `engines` range and the published package are unchanged.
 
 ## 0.2.0 - 2026-10-13
 
-- **Breaking (security hardening):** project overlays are now opt-in. A `<project>/.pi/pi-prefix.json` loads only when Pi trusts the project and the user has approved that project path and the exact overlay content in the global config (`projectOverlays.allow`). Approve with `/pi-prefix allow-project`; a changed overlay is ignored until approved again. Existing overlays stay inactive until approved.
-- **Breaking:** project overlays can only add keys bound to registered extension commands. They can no longer set `prefix` or `timeoutMs`, replace or remove global bindings, or bind actions, events, built-in commands, or plain text. `/share`, `/export`, `/login`, `/trust`, and `/quit` are refused.
-- **Breaking:** project binding commands must be exactly `/name` (lowercase letters, digits, `:`, `_`, `-`), with no arguments and no control, bidi, or zero-width characters. `/pi-prefix` is also refused. Overlays that break these rules are rejected at load instead of at keypress.
-- The approval dialog defaults to No, lists each key with its command and owning extension instead of the raw file, and is refused outside the interactive terminal UI. Approvals pin the overlay's bytes, use the case-correct real path, and are written to the global config without widening its file mode.
-- An untrusted project's overlay is never opened. A trusted overlay must be a regular file of at most 64 KiB; devices, FIFOs, directories, and larger files are refused.
-- A global `null` binding now reserves its key so a project overlay cannot claim it. Approval rewrites the global config as formatted JSON (2-space indent); key order can change.
-- Show a notice that lists each project key and its command, at startup and after `/reload`, and a `prefix [project]` status marker while a project overlay is active (not shown when a key conflict disables pi-prefix; hidden characters in the path are escaped), and report the overlay state in `/pi-prefix`.
-- Reject key ids that match built-in object property names such as `__proto__` or `constructor`. Before, such a binding key broke editor input after the prefix.
-- Docs only: README examples use `ctrl+\`, which is free in Pi 1.1.0, and state that insert-only bindings replace the draft. Add a live dogfooding matrix (`DOGFOOD.md`) and agent guidance (`AGENTS.md`) to run it before each release. No code change.
+- **Breaking (security hardening):** project overlays are now opt-in. A
+  `<project>/.pi/pi-prefix.json` loads only when Pi trusts the project and the
+  user has approved that project path and the exact overlay content in the
+  global config (`projectOverlays.allow`). Approve with
+  `/pi-prefix allow-project`; a changed overlay is ignored until approved again.
+  Existing overlays stay inactive until approved.
+- **Breaking:** project overlays can only add keys bound to registered extension
+  commands. They can no longer set `prefix` or `timeoutMs`, replace or remove
+  global bindings, or bind actions, events, built-in commands, or plain text.
+  `/share`, `/export`, `/login`, `/trust`, and `/quit` are refused.
+- **Breaking:** project binding commands must be exactly `/name` (lowercase
+  letters, digits, `:`, `_`, `-`), with no arguments and no control, bidi, or
+  zero-width characters. `/pi-prefix` is also refused. Overlays that break these
+  rules are rejected at load instead of at keypress.
+- The approval dialog defaults to No, lists each key with its command and owning
+  extension instead of the raw file, and is refused outside the interactive
+  terminal UI. Approvals pin the overlay's bytes, use the case-correct real
+  path, and are written to the global config without widening its file mode.
+- An untrusted project's overlay is never opened. A trusted overlay must be a
+  regular file of at most 64 KiB; devices, FIFOs, directories, and larger files
+  are refused.
+- A global `null` binding now reserves its key so a project overlay cannot claim
+  it. Approval rewrites the global config as formatted JSON (2-space indent);
+  key order can change.
+- Show a notice that lists each project key and its command, at startup and
+  after `/reload`, and a `prefix [project]` status marker while a project
+  overlay is active (not shown when a key conflict disables pi-prefix; hidden
+  characters in the path are escaped), and report the overlay state in
+  `/pi-prefix`.
+- Reject key ids that match built-in object property names such as `__proto__`
+  or `constructor`. Before, such a binding key broke editor input after the
+  prefix.
+- Docs only: README examples use `ctrl+\`, which is free in Pi 1.1.0, and state
+  that insert-only bindings replace the draft. Add a live dogfooding matrix
+  (`DOGFOOD.md`) and agent guidance (`AGENTS.md`) to run it before each release.
+  No code change.
 
 ## 0.1.6 - 2026-10-13
 
-- `/pi-prefix` now lists config errors and warnings while the extension is inactive, so an invalid config can be diagnosed after the startup notice has scrolled away.
-- Pass a delivery mode when dispatching extension commands, as required by the next Pi release while a run is starting. Pi 1.1.0 and the 0.84.4 baseline already accept it, so behavior on current hosts is unchanged.
+- `/pi-prefix` now lists config errors and warnings while the extension is
+  inactive, so an invalid config can be diagnosed after the startup notice has
+  scrolled away.
+- Pass a delivery mode when dispatching extension commands, as required by the
+  next Pi release while a run is starting. Pi 1.1.0 and the 0.84.4 baseline
+  already accept it, so behavior on current hosts is unchanged.
 
 ## 0.1.5 - 2026-10-13
 
-- Declare compatibility with Pi 1.x (`>=1.0.0 <2.0.0`) while retaining the existing 0.84.4–0.87.x and 0.99.x support ranges. No source change was needed: the Pi 1.0 to 1.1 changelog has no breaking change to the editor, shortcut, command, or event APIs this extension uses.
-- Move the independent CI compatibility check from Pi 0.99.1 to 1.1.0, alongside the locked baseline.
+- Declare compatibility with Pi 1.x (`>=1.0.0 <2.0.0`) while retaining the
+  existing 0.84.4–0.87.x and 0.99.x support ranges. No source change was needed:
+  the Pi 1.0 to 1.1 changelog has no breaking change to the editor, shortcut,
+  command, or event APIs this extension uses.
+- Move the independent CI compatibility check from Pi 0.99.1 to 1.1.0, alongside
+  the locked baseline.
 
 ## 0.1.4 - 2026-09-30
 
-- Declare compatibility with Pi 0.99.1 while retaining the existing 0.84.4–0.87.x support range.
+- Declare compatibility with Pi 0.99.1 while retaining the existing
+  0.84.4–0.87.x support range.
 - Add an independent Pi 0.99.1 CI check while preserving the locked baseline.
-- Refresh the baseline development dependencies without raising the minimum supported Pi host.
+- Refresh the baseline development dependencies without raising the minimum
+  supported Pi host.
 
 ## 0.1.3
 
-- Widen Pi peer and dev ranges to `<0.88.0`. Verified against 0.84.4, 0.86.1, 0.87.0, and 0.87.1 hosts: typecheck, test suite, and a live TUI dogfood driving prefix activation, dispatch, draft preservation, and cancel. No behavior change.
-- Note on Pi status display: 0.85.0-0.87.0 could embed working, compaction, and retry status in the editor border for editors that opted in; pi-prefix never opted in, and Pi removed the opt-in again in 0.87.1, so status renders beside the editor for every editor. Nothing to configure.
-- The package-content gate accepts npm 12's name-keyed `pack --json` manifest alongside the npm <=11 array form, so local npm versions no longer fail the test.
+- Widen Pi peer and dev ranges to `<0.88.0`. Verified against 0.84.4, 0.86.1,
+  0.87.0, and 0.87.1 hosts: typecheck, test suite, and a live TUI dogfood
+  driving prefix activation, dispatch, draft preservation, and cancel. No
+  behavior change.
+- Note on Pi status display: 0.85.0-0.87.0 could embed working, compaction, and
+  retry status in the editor border for editors that opted in; pi-prefix never
+  opted in, and Pi removed the opt-in again in 0.87.1, so status renders beside
+  the editor for every editor. Nothing to configure.
+- The package-content gate accepts npm 12's name-keyed `pack --json` manifest
+  alongside the npm <=11 array form, so local npm versions no longer fail the
+  test.
 
 ## 0.1.2
 
-- Docs only: unpinned README install line (pinned specs are skipped by `pi update`) and 0.1.1 provenance note. No code change.
+- Docs only: unpinned README install line (pinned specs are skipped by
+  `pi update`) and 0.1.1 provenance note. No code change.
 
 ## 0.1.1
 
-- Widen Pi peer and dev ranges to `<0.86.0`, covering the evidenced 0.85.x hosts. No behavior change.
-- First workflow-attested release: published from CI with SLSA provenance. (0.1.0 was published directly and carries no attestation.)
+- Widen Pi peer and dev ranges to `<0.86.0`, covering the evidenced 0.85.x
+  hosts. No behavior change.
+- First workflow-attested release: published from CI with SLSA provenance.
+  (0.1.0 was published directly and carries no attestation.)
 
 ## 0.1.0
 
 First public release.
 
-- Configurable prefix key dispatching a second key to a Pi app action, slash command, or extension event.
-- Layered configuration: shipped defaults → global `~/.pi/agent/pi-prefix.json` → trusted project `<project>/.pi/pi-prefix.json`, with `null` removing an inherited binding.
-- Zero-keymap by default: inert without an effective prefix and at least one binding.
-- Prefix/keybinding conflict guard: a colliding prefix disables pi-prefix and reports the exact keybinding ids; existing bindings are never edited.
-- Extension-owned slash commands dispatch through Pi's command pipeline with the editor draft preserved; other submitted commands replace and submit the draft.
-- `/pi-prefix` status: state, config paths, trust, effective prefix/timeout/bindings, diagnostics, conflicts.
+- Configurable prefix key dispatching a second key to a Pi app action, slash
+  command, or extension event.
+- Layered configuration: shipped defaults → global `~/.pi/agent/pi-prefix.json`
+  → trusted project `<project>/.pi/pi-prefix.json`, with `null` removing an
+  inherited binding.
+- Zero-keymap by default: inert without an effective prefix and at least one
+  binding.
+- Prefix/keybinding conflict guard: a colliding prefix disables pi-prefix and
+  reports the exact keybinding ids; existing bindings are never edited.
+- Extension-owned slash commands dispatch through Pi's command pipeline with the
+  editor draft preserved; other submitted commands replace and submit the draft.
+- `/pi-prefix` status: state, config paths, trust, effective
+  prefix/timeout/bindings, diagnostics, conflicts.
