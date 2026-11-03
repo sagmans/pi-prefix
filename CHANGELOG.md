@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Development only: an npm override pins the Pi host's minimatch dependency to
+  11.0.1 in the locked Pi baseline, which fixes GHSA-g3hv-75wg-m249 (denial of
+  service). The pinned Pi versions are unchanged. The published package does not
+  depend on minimatch and is unchanged.
 - Development only: the npm override for the locked Pi 0.84.4 baseline now pins
   its Undici dependency to 8.12.2, which fixes GHSA-xjj6-f33q-929c,
   GHSA-4qv8-2p9j-2685, and GHSA-f72v-6w45-q472. The published package does not
