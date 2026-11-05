@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- CI only: Dependabot may again propose Pi host updates inside the supported
+  line. Its npm ignore rule and comments still assumed the root lockfile holds
+  the Pi 0.84.4 baseline; the dev dependency moved to the `^1.4.0` range in
+  October, and the pre-push compatibility matrix now tests Pi 0.84.4, 1.1.0
+  and 1.2.0 from its own committed lockfiles in `compat/`, so a root update
+  retires no baseline. The rule now blocks only Pi 2.0.0 and later, which
+  the peer range does not support; adopting a new major stays a deliberate
+  decision.
+
 - Development only: the Pi host compatibility matrix (0.84.4, 1.1.0, 1.2.0)
   moved from the GitHub Actions `compatibility` workflow into the local
   pre-push hook `30-pi-compat`, which re-runs typecheck and tests per pushed

@@ -14,8 +14,10 @@ updates:
       actions:
         patterns: ["*"]
 
-  # The locked toolchain is the oldest supported Pi baseline that the
-  # compatibility matrix builds on, so its drift must stay visible.
+  # The dev lockfile tracks the current Pi host (^1.4.0). The pre-push
+  # compatibility matrix tests Pi 0.84.4, 1.1.0 and 1.2.0 from their own
+  # committed lockfiles in compat/, so a root Pi update retires no tested
+  # baseline and proposals inside the host line stay routine.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -24,19 +26,14 @@ updates:
     cooldown:
       default-days: 7
     ignore:
-      # The lockfile holds Pi 0.84.4, the oldest host the README supports, and
-      # nothing else tests it. Any version update, even a patch inside the dev
-      # range, would retire that baseline. Newer hosts are covered by the
-      # compatibility matrix instead. update-types binds version updates only,
-      # so advisory fixes still open a pull request.
-      # Pi 1.4.0 and later are outside the supported host line. A versions
-      # rule binds security updates too, so no proposal can reach them.
+      # Pi 2.0.0 and later are outside the supported host line: the peer range
+      # ends below 2.0.0, and adopting a new major also moves the peer range
+      # and the compatibility matrix, so it stays a deliberate decision. A
+      # versions rule binds security updates too, so no proposal can reach
+      # them; updates inside the host line, advisory fixes included, still
+      # open a pull request.
       - dependency-name: "@earendil-works/*"
-        versions: [">=1.4.0"]
-        update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+        versions: [">=2.0.0"]
     groups:
       # pi-coding-agent depends on pi-tui, and this repo also depends on it
       # directly. Separate proposals resolve two pi-tui copies, so typecheck
