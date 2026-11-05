@@ -219,10 +219,11 @@ working-status rendering. Pi controls the fallback status placement.
 
 ## Development
 
-The locked baseline retains Pi 0.84.4. A development-only npm override patches
-its pinned Undici dependency without changing the host API under test.
-Consumers supply Pi's runtime modules. npm does not apply this package's
-overrides when it is installed as a dependency.
+The locked baseline holds Pi 1.4.0, within the `^1.4.0` dev range.
+Development-only npm overrides patch the host's pinned Undici and minimatch
+dependencies without changing the host API under test. Consumers supply Pi's
+runtime modules. npm does not apply this package's overrides when it is
+installed as a dependency.
 
 ```bash
 npm install
