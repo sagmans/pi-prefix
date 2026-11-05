@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Development only: the Pi host compatibility matrix (0.84.4, 1.1.0, 1.2.0)
+  moved from the GitHub Actions `compatibility` workflow into the local
+  pre-push hook `30-pi-compat`, which re-runs typecheck and tests per pushed
+  commit. Each host version resolves from its own committed lockfile in
+  `compat/` with `npm ci --ignore-scripts`, so the matrix no longer performs
+  unlocked registry installs, and no push check runs in CI. The workflow file
+  was removed. The publish workflow stays, and it now disables the setup-node
+  package-manager cache: the job holds the publish credential, so it must
+  never restore state another run could have written.
+
 - Development only: an npm override pins the Pi host's minimatch dependency to
   11.0.1 in the locked Pi baseline, which fixes GHSA-g3hv-75wg-m249 (denial of
   service). The pinned Pi versions are unchanged. The published package does not

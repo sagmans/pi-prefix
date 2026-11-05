@@ -195,7 +195,9 @@ any Pi keybinding conflicts.
 
 Supports Pi hosts `>=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0`.
 The existing baseline covers 0.84.4, 0.86.1, 0.87.0, and 0.87.1.
-The `pre-push` hook also checks Pi 1.1.0 and 1.2.0 in a throwaway copy, without changing the baseline lockfile.
+The `pre-push` hook also checks Pi 0.84.4, 1.1.0 and 1.2.0 in throwaway
+worktrees, each from its own committed lockfile in `compat/`, without
+changing the baseline lockfile.
 Other intervening minor versions are not claimed as supported.
 Pi 0.99.1 passed combined stash, history, and prefix smoke checks in regular
 and fullscreen modes, including `/reload`. Pi 1.1.0 passed a live TUI smoke
@@ -233,9 +235,22 @@ Before each release, run the live checks in [DOGFOOD.md](DOGFOOD.md).
 
 ## Git hooks
 
-Checks run in tracked local Git hooks instead of push/PR CI. Run `scripts/setup-hooks` once after cloning; it points this clone's `core.hooksPath` at `.githooks`. Each hook runs the generic checks first (sign-off and commit message format, a gitleaks secret scan, and signed, signed-off commits on push), then this repository's checks in `.githooks/<hook>.d/` in name order. Install [gitleaks](https://github.com/gitleaks/gitleaks) first. Every check must pass before you push; never use `--no-verify`. Pre-push checks test exactly each pushed commit: in place only when it is the clean, unmodified checkout, otherwise in a temporary worktree of that commit.
+Checks run in tracked local Git hooks instead of push/PR CI. Run
+`scripts/setup-hooks` once after cloning; it points this clone's
+`core.hooksPath` at `.githooks`. Each hook runs the generic checks first
+(sign-off and commit message format, a gitleaks secret scan, and signed,
+signed-off commits on push), then this repository's checks in
+`.githooks/<hook>.d/` in name order. Install
+[gitleaks](https://github.com/gitleaks/gitleaks) first. Every check must pass
+before you push; never use `--no-verify`. Pre-push checks test exactly each
+pushed commit: in place only when it is the clean, unmodified checkout,
+otherwise in a temporary worktree of that commit.
 
 This repository's checks:
 
-- `pre-commit`: staged whitespace and conflict-marker check; Biome format and lint on the staged files (`npm run lint:fix` fixes most findings).
-- `pre-push`: typecheck, tests, `npm run lint` (Biome), `npm audit --audit-level=high`, `npm audit signatures`, pack dry-run. The Pi 1.1.0 and 1.2.0 host compatibility matrix stays in CI (`.github/workflows/compat.yml`).
+- `pre-commit`: staged whitespace and conflict-marker check; Biome format
+  and lint on the staged files (`npm run lint:fix` fixes most findings).
+- `pre-push`: typecheck, tests, `npm run lint` (Biome),
+  `npm audit --audit-level=high`, `npm audit signatures`, pack dry-run, and
+  the Pi 0.84.4, 1.1.0 and 1.2.0 host compatibility matrix (from the
+  committed lockfiles in `compat/`).

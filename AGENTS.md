@@ -26,8 +26,8 @@ Checks run in `.githooks/`, not in push/PR CI. Run `scripts/setup-hooks` after
 cloning. All checks must pass before you push. Never use `--no-verify`.
 `pre-commit`: Biome on the staged files. `pre-push`: typecheck, tests,
 `npm run lint`, `npm audit --audit-level=high`, `npm audit signatures`, pack
-dry-run. The Pi 0.84.4, 1.1.0 and 1.2.0 host compatibility matrix stays in CI
-(`.github/workflows/compat.yml`).
+dry-run, and the Pi 0.84.4, 1.1.0 and 1.2.0 host compatibility matrix
+(`30-pi-compat`, from the committed lockfiles in `compat/`).
 
 Commit messages follow `.githooks/GIT_CONVENTION.md`, which `commit-msg` and
 `pre-push` enforce. The generic checks need gitleaks, osv-scanner, semgrep,

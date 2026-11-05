@@ -1,7 +1,6 @@
 #!/bin/sh
 # Runs typecheck, tests, Biome, the dependency audits and a pack dry-run on
-# each pushed commit. The Pi host compatibility matrix stays in CI
-# (.github/workflows/compat.yml).
+# each pushed commit. The Pi host compatibility matrix runs in 30-pi-compat.
 set -eu
 
 checks() {

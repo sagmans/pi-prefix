@@ -28,9 +28,12 @@ jobs:
           # WHY: OIDC registry-token exchange needs npm >=11.15; Node 24
           # bundles it, Node 22 does not. WHY exact: a floating line resolves
           # from the runner toolcache and can lag a security release; move it
-          # with compat.yml on each Node 24 security fix.
+          # on each Node 24 security fix.
           node-version: "24.22.1"
           registry-url: "https://registry.npmjs.org"
+          # The job holds the publish credential, so it never restores a cache
+          # another run could have written, even if packageManager is added later.
+          package-manager-cache: false
       # WHY: no dependency in the tree needs lifecycle scripts, so blocking
       # them removes a whole class of supply-chain install-time code.
       - run: npm ci --ignore-scripts

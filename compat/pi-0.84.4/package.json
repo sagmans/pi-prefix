@@ -1,0 +1,67 @@
+{
+  "name": "@sagmans/pi-prefix",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Configurable prefix key that maps a second key to Pi app actions, slash commands, or extension events",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagmans/pi-prefix.git"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "keybindings",
+    "prefix"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/",
+    "defaults.json",
+    "schema.json",
+    "skills/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome ci --error-on-warnings .",
+    "lint:fix": "biome check --write ."
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0",
+    "@earendil-works/pi-tui": ">=0.84.4 <0.88.0 || >=0.99.1 <0.100.0 || >=1.0.0 <2.0.0"
+  },
+  "overrides": {
+    "@earendil-works/pi-coding-agent": {
+      "undici": "8.12.2"
+    },
+    "minimatch": "11.0.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3",
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-tui": "0.84.4",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "@earendil-works/pi-ai": "0.84.4",
+    "@earendil-works/pi-agent-core": "0.84.4"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  }
+}

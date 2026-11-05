@@ -15,7 +15,7 @@ updates:
         patterns: ["*"]
 
   # The locked toolchain is the oldest supported Pi baseline that the
-  # compatibility workflow builds on, so its drift must stay visible.
+  # compatibility matrix builds on, so its drift must stay visible.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -27,7 +27,7 @@ updates:
       # The lockfile holds Pi 0.84.4, the oldest host the README supports, and
       # nothing else tests it. Any version update, even a patch inside the dev
       # range, would retire that baseline. Newer hosts are covered by the
-      # compatibility workflow instead. update-types binds version updates only,
+      # compatibility matrix instead. update-types binds version updates only,
       # so advisory fixes still open a pull request.
       # Pi 1.4.0 and later are outside the supported host line. A versions
       # rule binds security updates too, so no proposal can reach them.
