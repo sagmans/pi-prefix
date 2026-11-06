@@ -9,6 +9,10 @@
 # @earendil-works packages to <v>, then run
 #   npm install --package-lock-only --ignore-scripts --min-release-age=7
 set -eu
+
+# A stalled package tool must stop the push and identify its step.
+INSTALL_TIMEOUT_SECONDS=300
+SUITE_TIMEOUT_SECONDS=600
 PI_COMPAT_VERSIONS='0.84.4 1.1.0 1.2.0'
 PI_SCOPE='@earendil-works/'
 
@@ -36,11 +40,11 @@ if (strip("package.json") !== strip(process.argv[1] + "/package.json")) {
 		deps=".pi-compat-$v"
 		mkdir "$deps" || return 1
 		cp "$lock/package.json" "$lock/package-lock.json" "$deps/" || return 1
-		(cd "$deps" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null) || return 1
+		(cd "$deps" && run_step 'Pi compatibility install' "$INSTALL_TIMEOUT_SECONDS" npm ci --ignore-scripts --no-audit --no-fund >/dev/null) || return 1
 		# A fresh worktree has no node_modules; link this version's set in.
 		ln -s "$deps/node_modules" node_modules || return 1
-		npm run --silent typecheck || return 1
-		npm test --silent || return 1
+		run_step 'Pi compatibility typecheck' "$SUITE_TIMEOUT_SECONDS" npm run --silent typecheck || return 1
+		run_step 'Pi compatibility tests' "$SUITE_TIMEOUT_SECONDS" npm test --silent || return 1
 		rm -f node_modules || return 1
 	done
 }

@@ -3,15 +3,20 @@
 # each pushed commit. The Pi host compatibility matrix runs in 30-pi-compat.
 set -eu
 
+# A stalled package tool must stop the push and identify its step.
+INSTALL_TIMEOUT_SECONDS=300
+SUITE_TIMEOUT_SECONDS=600
+NETWORK_TIMEOUT_SECONDS=120
+
 checks() {
-	npm run typecheck || return 1
-	npm test || return 1
-	npm run lint || return 1
+	run_step 'npm typecheck' "$SUITE_TIMEOUT_SECONDS" npm run typecheck || return 1
+	run_step 'npm test' "$SUITE_TIMEOUT_SECONDS" npm test || return 1
+	run_step 'npm lint' "$SUITE_TIMEOUT_SECONDS" npm run lint || return 1
 	# Dependency gates: known high or critical advisories, and registry
 	# signatures plus provenance of every installed package.
-	npm audit --audit-level=high || return 1
-	npm audit signatures || return 1
-	npm pack --dry-run >/dev/null || return 1
+	run_step 'npm audit' "$NETWORK_TIMEOUT_SECONDS" npm audit --audit-level=high || return 1
+	run_step 'npm audit signatures' "$NETWORK_TIMEOUT_SECONDS" npm audit signatures || return 1
+	run_step 'npm pack dry run' "$SUITE_TIMEOUT_SECONDS" npm pack --dry-run >/dev/null || return 1
 }
 
 # Helpers (staged_git, pushed_shas, at_sha, darwin_only) from .githooks/lib.
@@ -25,9 +30,9 @@ top=$(git rev-parse --show-toplevel)
 install_deps() {
 	[ "$(pwd -P)" != "$(CDPATH='' cd -- "$top" && pwd -P)" ] || return 0
 	if [ -f pnpm-lock.yaml ]; then
-		pnpm install --frozen-lockfile >/dev/null || return 1
+		run_step 'pnpm install' "$INSTALL_TIMEOUT_SECONDS" pnpm install --frozen-lockfile >/dev/null || return 1
 	elif [ -f package-lock.json ]; then
-		npm ci --ignore-scripts --no-audit --no-fund >/dev/null || return 1
+		run_step 'npm ci' "$INSTALL_TIMEOUT_SECONDS" npm ci --ignore-scripts --no-audit --no-fund >/dev/null || return 1
 	fi
 }
 
