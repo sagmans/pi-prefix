@@ -35,6 +35,9 @@
   out-of-bounds write) and CVE-2026-105483 and CVE-2026-106069 (TLS hostname
   check bypass). The `engines` range and the published package are unchanged.
 
+- Dependency updates are maintained by hand on `main`; the automated update PR
+  configuration is retired. Security alerts stay enabled for manual triage.
+
 ## 0.2.0 - 2026-10-13
 
 - **Breaking (security hardening):** project overlays are now opt-in. A
